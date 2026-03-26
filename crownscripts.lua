@@ -681,24 +681,28 @@ local function getBestMob()
     local dist = 10000
     
     local targetMobs = nil
-    if sailorSettings.activeQuestLine ~= "None" then
+    if sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] then
         targetMobs = questLines[sailorSettings.activeQuestLine].mobs
     end
 
     for _, v in ipairs(workspace:GetChildren()) do
         if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
-            local name = v.Name:lower()
-            if not (name:find("quest") or name:find("npc")) then
+            local hrp = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")
+            if hrp then
+                local name = v.Name:lower()
                 local isValid = true
+                
                 if targetMobs then
                     isValid = false
                     for _, m in ipairs(targetMobs) do
                         if name:find(m:lower()) then isValid = true break end
                     end
+                elseif name:find("quest") or name:find("npc") then
+                    isValid = false
                 end
 
                 if isValid then
-                    local d = (v.PrimaryPart and (v.PrimaryPart.Position - root.Position).Magnitude) or 10000
+                    local d = (hrp.Position - root.Position).Magnitude
                     if d < dist then
                         dist = d
                         bestMob = v
@@ -716,13 +720,13 @@ local function getBoss()
     local bosses = {"Aizen", "True Aizen", "Quincy", "Hollow", "Maiden", "Yamato", "Monarch", "Escanor"}
     local targetName = sailorSettings.bossTarget
     
-    if sailorSettings.activeQuestLine ~= "None" then
+    if sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] then
         local questBoss = questLines[sailorSettings.activeQuestLine].boss
         if questBoss then targetName = questBoss end
     end
 
     for _, v in ipairs(workspace:GetChildren()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
             local name = v.Name
             local isBoss = false
             for _, b in ipairs(bosses) do
@@ -756,14 +760,22 @@ local function acceptQuest(name)
 end
 
 -- Main Heartbeat Loop
+local currentFarmTarget = nil
 RunService.Heartbeat:Connect(function()
-    if not sailorSettings.autoLevel and not sailorSettings.autoBoss and sailorSettings.activeQuestLine == "None" then return end
+    if not sailorSettings.autoLevel and not sailorSettings.autoBoss and sailorSettings.activeQuestLine == "None" then 
+        if currentFarmTarget and currentFarmTarget:FindFirstChild("FarmHighlight") then currentFarmTarget.FarmHighlight:Destroy() end
+        currentFarmTarget = nil
+        return 
+    end
     pcall(function()
         local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+        if not char or not char:FindFirstChild("HumanoidRootPart") then 
+            StatusLabel.Text = "Waiting for Character..."
+            return 
+        end
         
         local target = nil
-        local qData = sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] or nil
+        local qData = (sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine]) or nil
         
         if sailorSettings.autoBoss or (qData and qData.boss) then
             target = getBoss()
@@ -784,32 +796,50 @@ RunService.Heartbeat:Connect(function()
             end
         end
         
-        if target and target:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("HumanoidRootPart") then
-            local isNPC = qData and target.Name:lower():find(qData.npc:lower())
-            if isNPC then
-                char.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 0, sailorSettings.npcDist)
-                acceptQuest(sailorSettings.activeQuestLine)
+        -- Target Visualization & Feedback
+        if target ~= currentFarmTarget then
+            if currentFarmTarget and currentFarmTarget:FindFirstChild("FarmHighlight") then currentFarmTarget.FarmHighlight:Destroy() end
+            if target then
+                local h = Instance.new("Highlight")
+                h.Name = "FarmHighlight"
+                h.FillColor = Color3.fromRGB(0, 255, 150)
+                h.Parent = target
+                StatusLabel.Text = "Target: " .. target.Name
             else
-                -- Robust Farming Position (Horizontal Above)
-                char.HumanoidRootPart.Velocity = Vector3.new(0,0,0) -- Stop physics flinging
-                char.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, sailorSettings.farmDist, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-                
-                if sailorSettings.autoAttack then
-                    local t = char:FindFirstChildOfClass("Tool")
-                    if not t then
-                        local bp = player:FindFirstChild("Backpack")
-                        if bp then
-                            local tool = bp:FindFirstChildOfClass("Tool")
-                            if tool then tool.Parent = char end
+                StatusLabel.Text = "Scanning for Mobs..."
+            end
+            currentFarmTarget = target
+        end
+        
+        if target then
+            local targetHRP = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Torso") or target:FindFirstChild("Root")
+            if targetHRP and char:FindFirstChild("HumanoidRootPart") then
+                local isNPC = qData and target.Name:lower():find(qData.npc:lower())
+                if isNPC then
+                    char.HumanoidRootPart.CFrame = targetHRP.CFrame * CFrame.new(0, 0, sailorSettings.npcDist)
+                    acceptQuest(sailorSettings.activeQuestLine)
+                else
+                    -- Robust Farming Position
+                    char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+                    char.HumanoidRootPart.CFrame = targetHRP.CFrame * CFrame.new(0, sailorSettings.farmDist, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                    
+                    if sailorSettings.autoAttack then
+                        local t = char:FindFirstChildOfClass("Tool")
+                        if not t then
+                            local bp = player:FindFirstChild("Backpack")
+                            if bp then
+                                local tool = bp:FindFirstChildOfClass("Tool")
+                                if tool then tool.Parent = char end
+                            end
                         end
+                        t = char:FindFirstChildOfClass("Tool")
+                        if t then t:Activate() end
+                        VirtualUser:ClickButton1(Vector2.new(9999, 9999))
                     end
-                    t = char:FindFirstChildOfClass("Tool")
-                    if t then t:Activate() end
-                    VirtualUser:ClickButton1(Vector2.new(9999, 9999)) -- Simulate mouse click
-                end
-                if sailorSettings.autoSkills then
-                    local r = ReplicatedStorage:FindFirstChild("Skills", true)
-                    if r then for _, k in ipairs({"Z", "X", "C", "V"}) do r:FireServer(k) end end
+                    if sailorSettings.autoSkills then
+                        local r = ReplicatedStorage:FindFirstChild("Skills", true)
+                        if r then for _, k in ipairs({"Z", "X", "C", "V"}) do r:FireServer(k) end end
+                    end
                 end
             end
         end
