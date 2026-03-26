@@ -43,9 +43,14 @@ if targetParent:FindFirstChild("CrownScripts2026") then
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CrownScripts2026"
+ScreenGui.Name = game:GetService("HttpService"):GenerateGUID(false)
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = targetParent
+
+-- Anti-Cheat Protection (Synapse/Executor standard)
+if syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+end
 
 local function makeDraggable(frame)
     local dragging, dragInput, dragStart, startPos
@@ -371,7 +376,7 @@ TabListLayout.Parent = TabContainer
 
 local TabButtons = {}
 local Pages = {}
-local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Misc", "Status", "Credits"}
+local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Solver", "Misc", "Status", "Credits"}
 
 -- Helper functions for UI
 local function AddSlider(parent, name, minV, maxV, default, unit, callback)
@@ -925,17 +930,116 @@ task.spawn(function()
                 
                 -- Sequential Auto Skills (Z, X, C, V, F)
                 if sailorSettings.autoSkills then
-                    local keys = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}
-                    for _, key in ipairs(keys) do
-                        if VirtualInputManager then
-                            VirtualInputManager:SendKeyEvent(true, key, false, game)
+                    local hwKeys = {0x5A, 0x58, 0x43, 0x56, 0x46}
+                    local enKeys = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}
+                    
+                    for i, key in ipairs(hwKeys) do
+                        if keypress then
+                            keypress(key)
+                            task.wait(0.05)
+                            keyrelease(key)
                             task.wait(0.1)
-                            VirtualInputManager:SendKeyEvent(false, key, false, game)
+                        elseif VirtualInputManager then
+                            VirtualInputManager:SendKeyEvent(true, enKeys[i], false, game)
+                            task.wait(0.05)
+                            VirtualInputManager:SendKeyEvent(false, enKeys[i], false, game)
+                            task.wait(0.1)
                         end
                     end
                 end
                 
             end)
+        end
+    end
+end)
+
+questLines["CustomSolver"] = { npc = "None", mobs = {}, boss = nil, level = "Any" }
+local activeSolver = "None"
+
+local function hasItem(itemName, countRequirement)
+    countRequirement = countRequirement or 1
+    local count = 0
+    pcall(function()
+        if player.Backpack then
+            for _, v in ipairs(player.Backpack:GetChildren()) do
+                if v.Name:find(itemName) then
+                    if v:IsA("Tool") then count = count + 1
+                    elseif v:IsA("IntValue") or v:IsA("NumberValue") then count = count + v.Value end
+                end
+            end
+        end
+        if player.Character then
+            for _, v in ipairs(player.Character:GetChildren()) do
+                if v.Name:find(itemName) then
+                    if v:IsA("Tool") then count = count + 1 end
+                end
+            end
+        end
+    end)
+    return count >= countRequirement
+end
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if activeSolver ~= "None" then
+            if activeSolver == "Gilgamesh" then
+                if not hasItem("Divine Grail") then
+                    if not hasItem("Broken Sword", 3) then
+                        AddStatusLog("[SOLVER] Gilgamesh: Need 3 Broken Swords. Farming Sword NPCs.", "warn")
+                        sailorSettings.autoBoss = false
+                        questLines["CustomSolver"].mobs = {"Sword"}
+                        questLines["CustomSolver"].boss = nil
+                        sailorSettings.activeQuestLine = "CustomSolver"
+                    else
+                        AddStatusLog("[SOLVER] Gilgamesh: 3 Broken Swords found. Crafting Divine Grail (Teleporting).", "warn")
+                        local crafter = workspace:FindFirstChild("Grail", true) or workspace:FindFirstChild("Babylon", true)
+                        if crafter and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                            player.Character.HumanoidRootPart.CFrame = crafter.CFrame or crafter:FindFirstChild("HumanoidRootPart").CFrame
+                            local pp = crafter:FindFirstChildOfClass("ProximityPrompt", true)
+                            if pp then fireproximityprompt(pp) end
+                        end
+                    end
+                else
+                    AddStatusLog("[SOLVER] Gilgamesh: Have Grail. Auto Summoning Boss.", "success")
+                    sailorSettings.activeQuestLine = "CustomSolver"
+                    questLines["CustomSolver"].mobs = {}
+                    sailorSettings.bossTarget = "Gilgamesh"
+                    sailorSettings.autoSummon = true
+                    sailorSettings.autoBoss = true
+                end
+            elseif activeSolver == "Cid V1" then
+                if not hasItem("Shadow Sword") and not hasItem("Cid V1") then
+                    AddStatusLog("[SOLVER] Cid V1: Need Shadow Sword. Auto Boss (Cid) inside shadow dungeon.", "warn")
+                    sailorSettings.activeQuestLine = "CustomSolver"
+                    questLines["CustomSolver"].mobs = {}
+                    sailorSettings.bossTarget = "Cid"
+                    sailorSettings.autoBoss = true
+                else
+                    AddStatusLog("[SOLVER] Cid V1: Sword Acquired! Mastery Phase: Talk to Cid NPC on Starter Island.", "success")
+                    activeSolver = "None"
+                end
+            elseif activeSolver == "Cid V2" then
+                if not hasItem("Atomic Sword") then
+                    if not hasItem("Abyss Sigil", 80) then
+                        AddStatusLog("[SOLVER] Cid V2: Farming 80 Abyss Sigils from Lawless Island NPCs.", "warn")
+                        sailorSettings.autoBoss = false
+                        questLines["CustomSolver"].mobs = {"Lawless"}
+                        questLines["CustomSolver"].boss = nil
+                        sailorSettings.activeQuestLine = "CustomSolver"
+                    else
+                        AddStatusLog("[SOLVER] Cid V2: Sigils Acquired. Farming Atomic Boss for final materials.", "success")
+                        sailorSettings.activeQuestLine = "CustomSolver"
+                        questLines["CustomSolver"].mobs = {}
+                        sailorSettings.bossTarget = "Atomic"
+                        sailorSettings.autoSummon = true
+                        sailorSettings.autoBoss = true
+                    end
+                else
+                    AddStatusLog("[SOLVER] Cid V2 Acquired! Take Atomic Sword to Mastery NPC.", "success")
+                    activeSolver = "None"
+                end
+            end
         end
     end
 end)
@@ -1206,56 +1310,72 @@ Players.PlayerAdded:Connect(CreateESP)
 for _, p in ipairs(Players:GetPlayers()) do CreateESP(p) end
 
 local bossTracerEnabled = false
+local TracedBosses = {}
+
+task.spawn(function()
+    local knownBosses = {"Manipulator", "Cursed", "Limitless", "Aizen", "Yamato", "Escanor"}
+    while true do
+        task.wait(2)
+        if bossTracerEnabled then
+            local newBosses = {}
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
+                    local isBoss = false
+                    if sailorSettings.bossTarget ~= "All" and v.Name:find(sailorSettings.bossTarget) then isBoss = true end
+                    if not isBoss then
+                        for _, kb in ipairs(knownBosses) do
+                            if v.Name:find(kb) then isBoss = true; break end
+                        end
+                    end
+                    if isBoss then table.insert(newBosses, v) end
+                end
+            end
+            TracedBosses = newBosses
+        else
+            if #TracedBosses > 0 then
+                for _, v in ipairs(TracedBosses) do
+                    if v and v.Parent then
+                        if v:FindFirstChild("BossTracerGui") then v.BossTracerGui:Destroy() end
+                        if v:FindFirstChild("BossTracerHighlight") then v.BossTracerHighlight:Destroy() end
+                    end
+                end
+                TracedBosses = {}
+            end
+        end
+    end
+end)
 
 RunService.RenderStepped:Connect(function()
     if espEnabled then for _, p in ipairs(Players:GetPlayers()) do CreateESP(p) end end
     
-    -- Boss Tracer Map-Wide Logic
+    -- Boss Tracer Map-Wide Logic (Completely Lag-Free)
     if bossTracerEnabled then
-        local knownBosses = {"Manipulator", "Cursed", "Limitless", "Aizen", "Yamato", "Escanor"}
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
-                local isBoss = false
-                if sailorSettings.bossTarget ~= "All" and v.Name:find(sailorSettings.bossTarget) then isBoss = true end
-                if not isBoss then
-                    for _, kb in ipairs(knownBosses) do
-                        if v.Name:find(kb) then isBoss = true; break end
-                    end
+        for _, v in ipairs(TracedBosses) do
+            if v and v.Parent and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                if not v:FindFirstChild("BossTracerGui") then
+                    local bb = Instance.new("BillboardGui")
+                    bb.Name = "BossTracerGui"
+                    bb.AlwaysOnTop = true
+                    bb.Size = UDim2.new(0, 150, 0, 30)
+                    bb.ExtentsOffset = Vector3.new(0, 5, 0)
+                    
+                    local txt = Instance.new("TextLabel")
+                    txt.Size = UDim2.new(1,0,1,0)
+                    txt.BackgroundTransparency = 1
+                    txt.Text = "★ BOSS: " .. v.Name .. " ★"
+                    txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                    txt.TextScaled = true
+                    txt.Font = Enum.Font.SourceSansBold
+                    txt.Parent = bb
+                    bb.Parent = v
+                    
+                    local h = Instance.new("Highlight")
+                    h.Name = "BossTracerHighlight"
+                    h.FillColor = Color3.fromRGB(255, 20, 20)
+                    h.FillTransparency = 0.5
+                    h.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    h.Parent = v
                 end
-                
-                if isBoss then
-                    if not v:FindFirstChild("BossTracerGui") then
-                        local bb = Instance.new("BillboardGui")
-                        bb.Name = "BossTracerGui"
-                        bb.AlwaysOnTop = true
-                        bb.Size = UDim2.new(0, 150, 0, 30)
-                        bb.ExtentsOffset = Vector3.new(0, 5, 0)
-                        
-                        local txt = Instance.new("TextLabel")
-                        txt.Size = UDim2.new(1,0,1,0)
-                        txt.BackgroundTransparency = 1
-                        txt.Text = "★ BOSS: " .. v.Name .. " ★"
-                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
-                        txt.TextScaled = true
-                        txt.Font = Enum.Font.SourceSansBold
-                        txt.Parent = bb
-                        bb.Parent = v
-                        
-                        local h = Instance.new("Highlight")
-                        h.Name = "BossTracerHighlight"
-                        h.FillColor = Color3.fromRGB(255, 20, 20)
-                        h.FillTransparency = 0.5
-                        h.OutlineColor = Color3.fromRGB(255, 0, 0)
-                        h.Parent = v
-                    end
-                end
-            end
-        end
-    else
-        for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("Model") and v:FindFirstChild("BossTracerGui") then
-                v.BossTracerGui:Destroy()
-                if v:FindFirstChild("BossTracerHighlight") then v.BossTracerHighlight:Destroy() end
             end
         end
     end
@@ -1376,18 +1496,32 @@ pcall(function()
     AddControl(5, "left", "Auto NPC Interact", false, "toggle", function(v) sailorSettings.autoNPC = v end)
     AddControl(5, "left", "NPC Interaction Dist", 10, "slider", function(v) sailorSettings.npcDist = v end, {min=5, max=20, unit=" studs"})
 
-    AddControl(6, "left", "Speed Multiplier", 1, "slider", function(v) speedMultiplier = v end, {min=1, max=10, unit="x"})
-    AddControl(6, "left", "Infinite Jump", false, "toggle", function(v) infiniteJumpEnabled = v end)
+    AddControl(6, "left", "Solver Strategy", "None", "dropdown", function(v) activeSolver = v end, {options={"None", "Cid V1", "Cid V2", "Gilgamesh"}})
+    local solveInfo = Instance.new("TextLabel")
+    solveInfo.Size = UDim2.new(1, -20, 0, 80)
+    solveInfo.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
+    solveInfo.Text = "Warning: The Solver will automatically change your target, teleport you to crafting NPCs, and bypass your normal quest lines."
+    solveInfo.TextColor3 = Theme.Cyan
+    solveInfo.TextSize = 13
+    solveInfo.Font = Enum.Font.SourceSansBold
+    solveInfo.ZIndex = 11
+    solveInfo.Parent = Pages[6].right
+    local sCorner = Instance.new("UICorner")
+    sCorner.CornerRadius = UDim.new(0, 6)
+    sCorner.Parent = solveInfo
+
+    AddControl(7, "left", "Speed Multiplier", 1, "slider", function(v) speedMultiplier = v end, {min=1, max=10, unit="x"})
+    AddControl(7, "left", "Infinite Jump", false, "toggle", function(v) infiniteJumpEnabled = v end)
 
     local CreditsText = Instance.new("TextLabel")
     CreditsText.Size = UDim2.new(1, -20, 0, 100)
     CreditsText.BackgroundTransparency = 1
-    CreditsText.Text = "Developers:\ncrowdsect, coleistic\n\nOfficial Server:\ndiscord.gg/crownscripts"
+    CreditsText.Text = "Developers:\ncrowdsect, coleistic\n\nOfficial Server:\ndiscord.gg/blindfold"
     CreditsText.TextColor3 = Theme.Text
     CreditsText.TextSize = 16
     CreditsText.Font = Enum.Font.SourceSansBold
     CreditsText.ZIndex = 11
-    CreditsText.Parent = Pages[8].left -- Credits moved to page 8
+    CreditsText.Parent = Pages[9].left -- Credits moved to page 9
 
     Notification("CrownScripts 2026 Loaded Successfully")
     StatusLabel.Text = "Build: stable_v1 | Active & Stable"
