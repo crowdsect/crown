@@ -22,6 +22,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- Anti-AFK
 player.Idled:Connect(function()
@@ -936,14 +937,14 @@ task.spawn(function()
                     for i, key in ipairs(hwKeys) do
                         if keypress then
                             keypress(key)
-                            task.wait(0.05)
+                            task.wait(0.08)
                             keyrelease(key)
-                            task.wait(0.1)
+                            task.wait(0.05)
                         elseif VirtualInputManager then
                             VirtualInputManager:SendKeyEvent(true, enKeys[i], false, game)
-                            task.wait(0.05)
+                            task.wait(0.08)
                             VirtualInputManager:SendKeyEvent(false, enKeys[i], false, game)
-                            task.wait(0.1)
+                            task.wait(0.05)
                         end
                     end
                 end
@@ -1131,15 +1132,17 @@ RunService.Heartbeat:Connect(function()
             end
         end
         
-        if not target and (sailorSettings.autoBoss or (qData and qData.boss)) then
-            target = getBoss()
-            if not target and sailorSettings.autoSummon then
-                local r = ReplicatedStorage:FindFirstChild("SummonBoss", true) or ReplicatedStorage:FindFirstChild("SummonRemote", true)
-                if r then r:FireServer("Hard") end
+        if sailorSettings.autoBoss or (qData and qData.boss) then
+            if not target then
+                target = getBoss()
+                if not target and sailorSettings.autoSummon then
+                    local r = ReplicatedStorage:FindFirstChild("SummonBoss", true) or ReplicatedStorage:FindFirstChild("SummonRemote", true)
+                    if r then r:FireServer("Hard") end
+                end
             end
+        else
+            if not target then target = getBestMob() end
         end
-        
-        if not target then target = getBestMob() end
         
         -- Target Visualization & Feedback
         if target ~= currentFarmTarget then
@@ -1227,7 +1230,11 @@ RunService.Heartbeat:Connect(function()
     pcall(function()
         local char = player.Character
         local t = player.Character and player.Character:FindFirstChildOfClass("Tool")
-        if not t or not t:FindFirstChild("Handle") then return end
+        if not t then return end
+        
+        -- Find a valid hitbox part (Handle or any BasePart)
+        local hitbox = t:FindFirstChild("Handle") or t:FindFirstChildWhichIsA("BasePart", true)
+        if not hitbox then return end
         
         local root = char:FindFirstChild("HumanoidRootPart")
         if not root then return end
@@ -1238,12 +1245,14 @@ RunService.Heartbeat:Connect(function()
                     local dist = (v.HumanoidRootPart.Position - root.Position).Magnitude
                     if dist <= killAuraRange then
                         if firetouchinterest then
-                            for _, part in ipairs(v:GetChildren()) do
-                                if part:IsA("BasePart") then
-                                    firetouchinterest(t.Handle, part, 0)
-                                    firetouchinterest(t.Handle, part, 1)
+                            pcall(function()
+                                firetouchinterest(hitbox, v.HumanoidRootPart, 0)
+                                firetouchinterest(hitbox, v.HumanoidRootPart, 1)
+                                if v:FindFirstChild("Head") then
+                                    firetouchinterest(hitbox, v.Head, 0)
+                                    firetouchinterest(hitbox, v.Head, 1)
                                 end
-                            end
+                            end)
                         end
                     end
                 end
