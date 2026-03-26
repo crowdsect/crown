@@ -850,10 +850,16 @@ local function getBoss()
         if questBoss then targetName = questBoss end
     end
 
+    local knownBosses = {"Manipulator", "Cursed King", "Cursed Vessel", "Limitless Sorcerer", "Aizen", "Yamato", "Escanor", "Gilgamesh", "Atomic"}
+
     -- Use Caching for Descendants Scan to Prevent Lag
     if cachedBoss and cachedBoss.Parent and cachedBoss:FindFirstChild("Humanoid") and cachedBoss.Humanoid.Health > 0 then
+        local isNamed = false
+        for _, kb in ipairs(knownBosses) do if cachedBoss.Name:find(kb) then isNamed = true break end end
+        
         local isTargetBoss = (targetName ~= "All" and cachedBoss.Name:find(targetName))
-        local isGenerousBoss = (targetName == "All")
+        local isGenerousBoss = (targetName == "All" and (isNamed or cachedBoss.Humanoid.MaxHealth >= 1000000))
+        
         if isTargetBoss or isGenerousBoss then return cachedBoss end
     end
 
@@ -862,19 +868,17 @@ local function getBoss()
         local bestBoss = nil
         local bDist = 100000
         
-        -- Jujutsu Kaisen / Special names fallback
-        local knownBosses = {"Manipulator", "Cursed King", "Cursed Vessel", "Limitless Sorcerer", "Aizen", "Yamato", "Escanor"}
-
         for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")) and not Players:GetPlayerFromCharacter(v) then
+            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")) and not Players:GetPlayerFromCharacter(v) then
                 local isNamedBoss = false
                 for _, kb in ipairs(knownBosses) do if v.Name:find(kb) then isNamedBoss = true break end end
                 
                 local isTargetBoss = (targetName ~= "All" and v.Name:find(targetName))
-                local isGenerousBoss = (targetName == "All" and isNamedBoss)
+                local isGenerousBoss = (targetName == "All" and (isNamedBoss or v.Humanoid.MaxHealth >= 1000000))
                 
                 if isTargetBoss or isGenerousBoss then
-                    local d = ((v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")).Position - char.HumanoidRootPart.Position).Magnitude
+                    local hrp = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")
+                    local d = (hrp.Position - char.HumanoidRootPart.Position).Magnitude
                     if d < bDist then
                         bDist = d
                         bestBoss = v
@@ -923,6 +927,10 @@ task.spawn(function()
                     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                     task.wait()
                     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                elseif VirtualUser and sailorSettings.autoAttack then
+                    VirtualUser:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                    task.wait()
+                    VirtualUser:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
                 elseif mouse1press then
                     mouse1press()
                     task.wait()
@@ -944,6 +952,10 @@ task.spawn(function()
                             VirtualInputManager:SendKeyEvent(true, enKeys[i], false, game)
                             task.wait(0.08)
                             VirtualInputManager:SendKeyEvent(false, enKeys[i], false, game)
+                            task.wait(0.05)
+                        elseif VirtualUser then
+                            VirtualUser:CaptureController() -- Attempt to focus
+                            VirtualUser:TypeKey(enKeys[i].Value)
                             task.wait(0.05)
                         end
                     end
@@ -1140,7 +1152,7 @@ RunService.Heartbeat:Connect(function()
                     if r then r:FireServer("Hard") end
                 end
             end
-        else
+        elseif sailorSettings.autoLevel or (qData and not qData.boss) then
             if not target then target = getBestMob() end
         end
         
@@ -1457,7 +1469,7 @@ pcall(function()
             for _, v in ipairs(workspace:GetDescendants()) do
                 if v:IsA("Model") and v:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(v) then
                     local isKnown = v.Name:find("Manipulator") or v.Name:find("Cursed") or v.Name:find("Limitless")
-                    if (v.Humanoid.MaxHealth >= 1000 or isKnown) then
+                    if (v.Humanoid.MaxHealth >= 1000000 or isKnown) then
                         if not dupCheck[v.Name] then
                             table.insert(newBosses, v.Name)
                             dupCheck[v.Name] = true
