@@ -741,22 +741,38 @@ local function getBoss()
 end
 
 local function hasActiveQuest()
-    local qf = player:FindFirstChild("Quest") or player:FindFirstChild("ActiveQuest")
+    local qf = player:FindFirstChild("Quest") or player:FindFirstChild("ActiveQuest") or player:FindFirstChild("QuestProgress")
     if qf and #qf:GetChildren() > 0 then return true end
-    local gui = playerGui:FindFirstChild("MainUI") or playerGui:FindFirstChild("QuestUI")
+    
+    local gui = playerGui:FindFirstChild("MainUI") or playerGui:FindFirstChild("QuestUI") or playerGui:FindFirstChild("HUD")
     if gui then
-        local f = gui:FindFirstChild("QuestFrame", true) or gui:FindFirstChild("Quest", true)
+        local f = gui:FindFirstChild("QuestFrame", true) or gui:FindFirstChild("Quest", true) or gui:FindFirstChild("QuestTracker", true) or gui:FindFirstChild("ActiveQuest", true)
         if f and f.Visible then return true end
     end
     return false
 end
 
 local lastQuestFire = 0
-local function acceptQuest(name)
-    if tick() - lastQuestFire < 2 then return end
+local function acceptQuest(name, npcModel)
+    if tick() - lastQuestFire < 1.5 then return end
     lastQuestFire = tick()
-    local r = ReplicatedStorage:FindFirstChild("QuestRemote", true) or ReplicatedStorage:FindFirstChild("AcceptQuest", true)
-    if r then r:FireServer(name) end
+    
+    -- Attempt 1: Fire Common Remotes
+    local possibleRemotes = {"QuestRemote", "AcceptQuest", "Quest", "StartQuest", "TakeQuest", "GetQuest"}
+    for _, remoteName in ipairs(possibleRemotes) do
+        local r = ReplicatedStorage:FindFirstChild(remoteName, true)
+        if r and r:IsA("RemoteEvent") then r:FireServer(name) end
+        if r and r:IsA("RemoteFunction") then pcall(function() r:InvokeServer(name) end) end
+    end
+    
+    -- Attempt 2: Fallback to ProximityPrompt if Exploit Supports it
+    if npcModel and fireproximityprompt then
+        for _, prompt in ipairs(npcModel:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                fireproximityprompt(prompt)
+            end
+        end
+    end
 end
 
 -- Main Heartbeat Loop
@@ -777,7 +793,17 @@ RunService.Heartbeat:Connect(function()
         local target = nil
         local qData = (sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine]) or nil
         
-        if sailorSettings.autoBoss or (qData and qData.boss) then
+        if qData and sailorSettings.autoNPC and not hasActiveQuest() then
+            -- Find NPC First
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and v.Name:lower():find(qData.npc:lower()) and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")) then
+                    target = v
+                    break
+                end
+            end
+        end
+        
+        if not target and (sailorSettings.autoBoss or (qData and qData.boss)) then
             target = getBoss()
             if not target and sailorSettings.autoSummon then
                 local r = ReplicatedStorage:FindFirstChild("SummonBoss", true) or ReplicatedStorage:FindFirstChild("SummonRemote", true)
@@ -786,15 +812,6 @@ RunService.Heartbeat:Connect(function()
         end
         
         if not target then target = getBestMob() end
-        
-        if not target and qData and sailorSettings.autoNPC and not hasActiveQuest() then
-            for _, v in ipairs(workspace:GetChildren()) do
-                if v:IsA("Model") and v.Name:lower():find(qData.npc:lower()) then
-                    target = v
-                    break
-                end
-            end
-        end
         
         -- Target Visualization & Feedback
         if target ~= currentFarmTarget then
@@ -817,7 +834,7 @@ RunService.Heartbeat:Connect(function()
                 local isNPC = qData and target.Name:lower():find(qData.npc:lower())
                 if isNPC then
                     char.HumanoidRootPart.CFrame = targetHRP.CFrame * CFrame.new(0, 0, sailorSettings.npcDist)
-                    acceptQuest(sailorSettings.activeQuestLine)
+                    acceptQuest(sailorSettings.activeQuestLine, target)
                 else
                     -- Robust Farming Position
                     char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
