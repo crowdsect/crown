@@ -774,41 +774,65 @@ local function getBestMob()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local root = char.HumanoidRootPart
     local bestMob = nil
-    local dist = 10000
+    local dist = 100000
+    
+    if not _G.lastMobScan then _G.lastMobScan = 0 end
+    
+    if _G.cachedMob and _G.cachedMob.Parent and _G.cachedMob:FindFirstChild("Humanoid") and _G.cachedMob.Humanoid.Health > 0 then
+        local targetMobs = nil
+        if sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] then
+            targetMobs = questLines[sailorSettings.activeQuestLine].mobs
+        end
+        local valid = true
+        if targetMobs then
+            valid = false
+            for _, m in ipairs(targetMobs) do
+                if _G.cachedMob.Name:lower():find(m:lower()) then valid = true break end
+            end
+        end
+        if valid then return _G.cachedMob end
+    end
     
     local targetMobs = nil
     if sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] then
         targetMobs = questLines[sailorSettings.activeQuestLine].mobs
     end
 
-    for _, v in ipairs(workspace:GetChildren()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
-            local hrp = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")
-            if hrp then
-                local name = v.Name:lower()
-                local isValid = true
-                
-                if targetMobs then
-                    isValid = false
-                    for _, m in ipairs(targetMobs) do
-                        if name:find(m:lower()) then isValid = true break end
+    if tick() - _G.lastMobScan > 2.5 then
+        _G.lastMobScan = tick()
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
+                local hrp = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")
+                if hrp then
+                    local name = v.Name:lower()
+                    local isValid = true
+                    
+                    if targetMobs then
+                        isValid = false
+                        for _, m in ipairs(targetMobs) do
+                            if name:find(m:lower()) then isValid = true break end
+                        end
+                    elseif name:find("quest") or name:find("npc") or v:FindFirstChild("ProximityPrompt", true) then
+                        isValid = false
                     end
-                elseif name:find("quest") or name:find("npc") then
-                    isValid = false
-                end
 
-                if isValid then
-                    local d = (hrp.Position - root.Position).Magnitude
-                    if d < dist then
-                        dist = d
-                        bestMob = v
+                    if isValid then
+                        local d = (hrp.Position - root.Position).Magnitude
+                        if d < dist then
+                            dist = d
+                            bestMob = v
+                        end
                     end
                 end
             end
         end
+        _G.cachedMob = bestMob
     end
-    return bestMob
+    return _G.cachedMob
 end
+
+local lastBossScan = 0
+local cachedBoss = nil
 
 local function getBoss()
     local char = player.Character
@@ -820,26 +844,87 @@ local function getBoss()
         if questBoss then targetName = questBoss end
     end
 
-    local bestBoss = nil
-    local bDist = 10000
+    -- Use Caching for Descendants Scan to Prevent Lag
+    if cachedBoss and cachedBoss.Parent and cachedBoss:FindFirstChild("Humanoid") and cachedBoss.Humanoid.Health > 0 then
+        local isTargetBoss = (targetName ~= "All" and cachedBoss.Name:find(targetName))
+        local isGenerousBoss = (targetName == "All")
+        if isTargetBoss or isGenerousBoss then return cachedBoss end
+    end
 
-    for _, v in ipairs(workspace:GetChildren()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
-            -- A boss is either explicitly the named target, OR if "All" is selected, it has massive health
-            local isTargetBoss = (targetName ~= "All" and v.Name:find(targetName))
-            local isGenerousBoss = (targetName == "All" and v.Humanoid.MaxHealth > 5000)
-            
-            if isTargetBoss or isGenerousBoss then
-                local d = (v.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
-                if d < bDist then
-                    bDist = d
-                    bestBoss = v
+    if tick() - lastBossScan > 2.5 then
+        lastBossScan = tick()
+        local bestBoss = nil
+        local bDist = 100000
+        
+        -- Jujutsu Kaisen / Special names fallback
+        local knownBosses = {"Manipulator", "Cursed King", "Cursed Vessel", "Limitless Sorcerer", "Aizen", "Yamato", "Escanor"}
+
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")) and not Players:GetPlayerFromCharacter(v) then
+                local isNamedBoss = false
+                for _, kb in ipairs(knownBosses) do if v.Name:find(kb) then isNamedBoss = true break end end
+                
+                local isTargetBoss = (targetName ~= "All" and v.Name:find(targetName))
+                local isGenerousBoss = (targetName == "All" and (v.Humanoid.MaxHealth > 1000 or isNamedBoss))
+                
+                if isTargetBoss or isGenerousBoss then
+                    local d = ((v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")).Position - char.HumanoidRootPart.Position).Magnitude
+                    if d < bDist then
+                        bDist = d
+                        bestBoss = v
+                    end
                 end
             end
         end
+        cachedBoss = bestBoss
     end
-    return bestBoss
+    
+    return cachedBoss
 end
+
+-- Ultra-Fast Dedicated AutoClicker
+task.spawn(function()
+    while true do
+        task.wait()
+        if sailorSettings.autoAttack then
+            pcall(function()
+                local char = player.Character
+                if not char then return end
+
+                -- Equip Weapon
+                local t = char:FindFirstChild(sailorSettings.selectedWeapon)
+                if not t and sailorSettings.selectedWeapon ~= "None" then
+                    local bp = player:FindFirstChild("Backpack")
+                    if bp then
+                        local tool = bp:FindFirstChild(sailorSettings.selectedWeapon)
+                        if tool then tool.Parent = char; task.wait(0.1) end
+                    end
+                end
+                
+                -- Fallback to any tool if selected isn't found
+                t = char:FindFirstChildOfClass("Tool")
+                if not t then
+                    local bp = player:FindFirstChild("Backpack")
+                    if bp then
+                        local tool = bp:FindFirstChildOfClass("Tool")
+                        if tool then tool.Parent = char; task.wait(0.1) end
+                    end
+                end
+                
+                t = char:FindFirstChildOfClass("Tool")
+                if t then 
+                    t:Activate() 
+                end
+                
+                -- Explicit spam
+                if VirtualUser then
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(Vector2.new(9999, 9999))
+                end
+            end)
+        end
+    end
+end)
 
 local function hasActiveQuest()
     local qf = player:FindFirstChild("Quest") or player:FindFirstChild("ActiveQuest") or player:FindFirstChild("QuestProgress")
@@ -965,34 +1050,6 @@ RunService.Heartbeat:Connect(function()
                     char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
                     char.HumanoidRootPart.CFrame = targetHRP.CFrame * CFrame.new(0, sailorSettings.farmDist, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                     
-                    if sailorSettings.autoAttack then
-                        local t = char:FindFirstChild(sailorSettings.selectedWeapon)
-                        if not t and sailorSettings.selectedWeapon ~= "None" then
-                            local bp = player:FindFirstChild("Backpack")
-                            if bp then
-                                local tool = bp:FindFirstChild(sailorSettings.selectedWeapon)
-                                if tool then tool.Parent = char end
-                            end
-                        end
-                        -- Fallback to any tool if selected is not found or is "None"
-                        t = char:FindFirstChildOfClass("Tool")
-                        if not t then
-                            local bp = player:FindFirstChild("Backpack")
-                            if bp then
-                                local tool = bp:FindFirstChildOfClass("Tool")
-                                if tool then tool.Parent = char end
-                            end
-                        end
-                        
-                        t = char:FindFirstChildOfClass("Tool")
-                        if t then 
-                            t:Activate() 
-                        end
-                        
-                        -- Explicit Left Click Simulation for Combat
-                        VirtualUser:CaptureController()
-                        VirtualUser:ClickButton1(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                    end
                     if sailorSettings.autoSkills then
                         local r = ReplicatedStorage:FindFirstChild("Skills", true)
                         if r then for _, k in ipairs({"Z", "X", "C", "V"}) do r:FireServer(k) end end
@@ -1199,16 +1256,19 @@ pcall(function()
         pcall(function()
             local newBosses = {"All"}
             local dupCheck = {}
-            for _, v in ipairs(workspace:GetChildren()) do
-                if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.MaxHealth >= 2000 and not Players:GetPlayerFromCharacter(v) then
-                    if not dupCheck[v.Name] then
-                        table.insert(newBosses, v.Name)
-                        dupCheck[v.Name] = true
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and v:FindFirstChild("Humanoid") and not Players:GetPlayerFromCharacter(v) then
+                    local isKnown = v.Name:find("Manipulator") or v.Name:find("Cursed") or v.Name:find("Limitless")
+                    if (v.Humanoid.MaxHealth >= 1000 or isKnown) then
+                        if not dupCheck[v.Name] then
+                            table.insert(newBosses, v.Name)
+                            dupCheck[v.Name] = true
+                        end
                     end
                 end
             end
             if bossDrop then bossDrop.Refresh(newBosses) end
-            AddStatusLog("Live Boss Table Refreshed: Found " .. #newBosses-1 .. " Boss Clusters.", "success")
+            AddStatusLog("Live Boss Table Refreshed: Found " .. (#newBosses-1) .. " distinct Boss Clusters globally.", "success")
         end)
     end)
     AddControl(4, "right", "Auto Summon Boss", false, "toggle", function(v) sailorSettings.autoSummon = v end)
