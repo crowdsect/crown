@@ -21,6 +21,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local VirtualUser = game:GetService("VirtualUser")
+
+-- Anti-AFK
+player.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
 
 local function getBestParent()
     local success, _ = pcall(function() return CoreGui.Name end)
@@ -64,12 +72,58 @@ local function makeDraggable(frame)
 end
 
 local uiVisible = true
+local function toggleUI()
+    uiVisible = not uiVisible
+    Main.Visible = uiVisible
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
     if not processed and input.KeyCode == Enum.KeyCode.Insert then
-        uiVisible = not uiVisible
-        ScreenGui.Enabled = uiVisible
+        toggleUI()
     end
 end)
+
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenBtn"
+OpenBtn.Size = UDim2.new(0, 50, 0, 50)
+OpenBtn.Position = UDim2.new(0, 20, 0.5, -25)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(80, 0, 255)
+OpenBtn.Text = "C"
+OpenBtn.TextColor3 = Color3.new(1, 1, 1)
+OpenBtn.TextSize = 25
+OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Parent = ScreenGui
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
+local OpenGradient = Instance.new("UIGradient")
+OpenGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 0, 255)), 
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 180))
+}
+OpenGradient.Parent = OpenBtn
+OpenBtn.MouseButton1Click:Connect(toggleUI)
+
+local function Notification(msg)
+    local note = Instance.new("TextLabel")
+    note.Size = UDim2.new(0, 250, 0, 40)
+    note.Position = UDim2.new(1, 0, 1, -100)
+    note.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    note.BorderSizePixel = 0
+    note.Text = msg
+    note.TextColor3 = Color3.new(1, 1, 1)
+    note.TextSize = 14
+    note.Font = Enum.Font.GothamMedium
+    note.Parent = ScreenGui
+    Instance.new("UICorner", note).CornerRadius = UDim.new(0, 8)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new(Color3.fromRGB(90, 0, 255), Color3.fromRGB(0, 255, 180))
+    grad.Parent = note
+    note:TweenPosition(UDim2.new(1, -270, 1, -100), "Out", "Back", 0.5)
+    task.delay(3, function()
+        note:TweenPosition(UDim2.new(1, 20, 1, -100), "In", "Quad", 0.5)
+        task.wait(0.5)
+        note:Destroy()
+    end)
+end
 
 -- Initialize Settings and Quest Data EARLY
 local sailorSettings = {
@@ -108,8 +162,8 @@ local questLines = {
 
 -- UI Containers
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 680, 0, 520)
-Main.Position = UDim2.new(0.5, -340, 0.5, -260)
+Main.Size = UDim2.new(0, 800, 0, 600)
+Main.Position = UDim2.new(0.5, -400, 0.5, -300)
 Main.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 Main.BorderSizePixel = 0
 Main.Parent = ScreenGui
@@ -134,10 +188,10 @@ KeyGradient.Rotation = 135
 KeyGradient.Parent = KeyFrame
 
 local KeyTitle = Instance.new("TextLabel")
-KeyTitle.Size = UDim2.new(1, 0, 0, 60)
-KeyTitle.Text = "CrownScripts | Key System"
+KeyTitle.Size = UDim2.new(1, 0, 0, 70)
+KeyTitle.Text = "CROWN SCRIPTS"
 KeyTitle.TextColor3 = Color3.new(1,1,1)
-KeyTitle.TextScaled = true
+KeyTitle.TextSize = 28
 KeyTitle.Font = Enum.Font.GothamBlack
 KeyTitle.BackgroundTransparency = 1
 KeyTitle.Parent = KeyFrame
@@ -210,55 +264,80 @@ GetKeyBtn.MouseButton1Click:Connect(function()
     KeyStatus.TextColor3 = Color3.fromRGB(0, 150, 255)
 end)
 
--- Main UI Setup
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
-local MainGradient = Instance.new("UIGradient")
-MainGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 0, 255)), 
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 180))
+-- Neon Theme Config
+local Theme = {
+    MainBG = Color3.fromRGB(12, 12, 28),
+    SecondaryBG = Color3.fromRGB(18, 18, 38),
+    Accent = Color3.fromRGB(150, 0, 255), -- Purple
+    Cyan = Color3.fromRGB(0, 255, 255),
+    Glow = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 0, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
+    },
+    Text = Color3.new(1,1,1),
+    DarkText = Color3.fromRGB(180,180,200)
 }
-MainGradient.Rotation = 135
-MainGradient.Parent = Main
+
+-- Main UI Setup
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 850, 0, 620)
+Main.Position = UDim2.new(0.5, -425, 0.5, -310)
+Main.BackgroundColor3 = Theme.MainBG
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+Main.Visible = false
+makeDraggable(Main)
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Thickness = 3
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+local UIStrokeGradient = Instance.new("UIGradient")
+UIStrokeGradient.Color = Theme.Glow
+UIStrokeGradient.Rotation = 45
+UIStrokeGradient.Parent = UIStroke
+UIStroke.Parent = Main
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 
 local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 60)
-TopBar.BackgroundTransparency = 0.35
+TopBar.Size = UDim2.new(1, 0, 0, 50)
 TopBar.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
-TopBar.BorderSizePixel = 0
+TopBar.BorderSizePixel = 1
+TopBar.BorderColor3 = Color3.fromRGB(40, 40, 60)
 TopBar.Parent = Main
-Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 16)
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(0.6, 0, 1, 0)
+Title.Size = UDim2.new(0.5, 0, 1, 0)
 Title.Position = UDim2.new(0, 20, 0, 0)
 Title.Text = "CrownScripts 2026"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBlack
+Title.TextColor3 = Theme.Text
+Title.TextSize = 22
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.BackgroundTransparency = 1
 Title.Parent = TopBar
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 40, 0, 40)
-CloseBtn.Position = UDim2.new(1, -50, 0, 10)
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
-CloseBtn.TextScaled = true
-CloseBtn.BackgroundTransparency = 1
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -45, 0, 7)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Theme.Text
+CloseBtn.TextSize = 18
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TopBar
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 4)
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, -20, 0, 50)
-TabContainer.Position = UDim2.new(0, 10, 0, 70)
+TabContainer.Size = UDim2.new(1, -20, 0, 45)
+TabContainer.Position = UDim2.new(0, 10, 0, 60)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = Main
 
 local TabListLayout = Instance.new("UIListLayout")
 TabListLayout.FillDirection = Enum.FillDirection.Horizontal
 TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-TabListLayout.Padding = UDim.new(0, 6)
+TabListLayout.Padding = UDim.new(0, 8)
 TabListLayout.Parent = TabContainer
 
 local TabButtons = {}
@@ -268,40 +347,43 @@ local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Misc", "Credits"
 -- Helper functions for UI
 local function AddSlider(parent, name, minV, maxV, default, unit, callback)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 70)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    frame.Size = UDim2.new(1, 0, 0, 45)
+    frame.BackgroundTransparency = 1
     frame.Parent = parent
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1,0,0,25)
-    label.Position = UDim2.new(0,15,0,5)
+    label.Size = UDim2.new(1,-40,0,20)
     label.BackgroundTransparency = 1
-    label.Text = name .. ": " .. default .. unit
-    label.TextColor3 = Color3.new(1,1,1)
-    label.TextScaled = true
+    label.Text = "• " .. name .. ": " .. default .. unit
+    label.TextColor3 = Theme.Text
+    label.TextSize = 13
     label.Font = Enum.Font.GothamSemibold
+    label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
     local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(0.85,0,0,8)
-    bar.Position = UDim2.new(0.075,0,0,45)
-    bar.BackgroundColor3 = Color3.fromRGB(50,50,70)
+    bar.Size = UDim2.new(0.65,0,0,4)
+    bar.Position = UDim2.new(0,0,0,30)
+    bar.BackgroundColor3 = Color3.fromRGB(40,40,60)
     bar.Parent = frame
     Instance.new("UICorner", bar).CornerRadius = UDim.new(0,999)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default-minV)/(maxV-minV),0,1,0)
-    fill.BackgroundColor3 = Color3.fromRGB(0,255,180)
+    fill.BackgroundColor3 = Theme.Cyan
     fill.Parent = bar
     Instance.new("UICorner", fill).CornerRadius = UDim.new(0,999)
 
-    local thumb = Instance.new("Frame")
-    thumb.Size = UDim2.new(0,18,0,18)
-    thumb.Position = UDim2.new((default-minV)/(maxV-minV), -9, 0.5, -9)
-    thumb.BackgroundColor3 = Color3.new(1,1,1)
-    thumb.Parent = bar
-    Instance.new("UICorner", thumb).CornerRadius = UDim.new(0,999)
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0,50,0,18)
+    valueLabel.Position = UDim2.new(0.7,0,0,23)
+    valueLabel.BackgroundColor3 = Theme.SecondaryBG
+    valueLabel.Text = default .. unit
+    valueLabel.TextColor3 = Theme.Text
+    valueLabel.TextSize = 12
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.Parent = frame
+    Instance.new("UICorner", valueLabel).CornerRadius = UDim.new(0,4)
 
     local value = default
     local dragging = false
@@ -310,8 +392,7 @@ local function AddSlider(parent, name, minV, maxV, default, unit, callback)
         value = math.clamp(newVal, minV, maxV)
         local percent = (value - minV) / (maxV - minV)
         fill.Size = UDim2.new(percent, 0, 1, 0)
-        thumb.Position = UDim2.new(percent, -9, 0.5, -9)
-        label.Text = name .. ": " .. math.floor(value*10)/10 .. unit
+        valueLabel.Text = math.floor(value*10)/10 .. unit
         pcall(callback, value)
     end
 
@@ -322,11 +403,7 @@ local function AddSlider(parent, name, minV, maxV, default, unit, callback)
             update(minV + p*(maxV-minV))
         end
     end)
-
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
-
+    UserInputService.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
     bar.InputChanged:Connect(function(inp)
         if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
             local p = math.clamp((inp.Position.X - bar.AbsolutePosition.X)/bar.AbsoluteSize.X, 0, 1)
@@ -337,143 +414,182 @@ end
 
 local function AddToggle(parent, name, default, callback)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,-20,0,55)
-    f.BackgroundColor3 = Color3.fromRGB(25,25,40)
+    f.Size = UDim2.new(1,0,0,30)
+    f.BackgroundTransparency = 1
     f.Parent = parent
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0,12)
 
     local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0.75,0,1,0)
-    lbl.Position = UDim2.new(0,15,0,0)
+    lbl.Size = UDim2.new(1, -70, 1, 0)
     lbl.BackgroundTransparency = 1
-    lbl.Text = name
-    lbl.TextColor3 = Color3.new(1,1,1)
-    lbl.TextScaled = true
+    lbl.Text = "• " .. name
+    lbl.TextColor3 = Theme.Text
+    lbl.TextSize = 14
     lbl.Font = Enum.Font.GothamSemibold
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = f
 
     local sw = Instance.new("TextButton")
-    sw.Size = UDim2.new(0,70,0,35)
-    sw.Position = UDim2.new(1,-85,0.5,-17.5)
-    sw.BackgroundColor3 = default and Color3.fromRGB(0,255,100) or Color3.fromRGB(70,70,85)
+    sw.Size = UDim2.new(0, 60, 0, 24)
+    sw.Position = UDim2.new(1, -65, 0.5, -12)
+    sw.BackgroundColor3 = default and Theme.Accent or Color3.fromRGB(40,40,60)
     sw.Text = default and "ON" or "OFF"
-    sw.TextColor3 = Color3.new(1,1,1)
-    sw.TextScaled = true
+    sw.TextColor3 = Theme.Text
+    sw.TextSize = 12
     sw.Font = Enum.Font.GothamBold
     sw.Parent = f
-    Instance.new("UICorner", sw).CornerRadius = UDim.new(0,999)
+    Instance.new("UICorner", sw).CornerRadius = UDim.new(0, 4)
 
     local state = default
     sw.MouseButton1Click:Connect(function()
         state = not state
         sw.Text = state and "ON" or "OFF"
-        TweenService:Create(sw, TweenInfo.new(0.3), {BackgroundColor3 = state and Color3.fromRGB(0,255,100) or Color3.fromRGB(70,70,85)}):Play()
+        TweenService:Create(sw, TweenInfo.new(0.25), {BackgroundColor3 = state and Theme.Accent or Color3.fromRGB(40,40,60)}):Play()
         pcall(callback, state)
     end)
 end
 
 local function AddDropdown(parent, name, options, callback)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,-20,0,55)
-    f.BackgroundColor3 = Color3.fromRGB(25,25,40)
+    f.Size = UDim2.new(1,0,0,35)
+    f.BackgroundTransparency = 1
     f.Parent = parent
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0,12)
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0.5,0,1,0)
-    lbl.Position = UDim2.new(0,15,0,0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = name
-    lbl.TextColor3 = Color3.new(1,1,1)
-    lbl.TextScaled = true
-    lbl.Font = Enum.Font.GothamSemibold
-    lbl.Parent = f
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.4,0,0,35)
-    btn.Position = UDim2.new(1,-15,0.5,-17.5)
-    btn.AnchorPoint = Vector2.new(1,0)
-    btn.BackgroundColor3 = Color3.fromRGB(30,30,45)
-    btn.Text = options[1]
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
+    btn.Size = UDim2.new(1,0,1,0)
+    btn.BackgroundColor3 = Theme.SecondaryBG
+    btn.Text = name .. ": " .. options[1]
+    btn.TextColor3 = Theme.Text
+    btn.TextSize = 13
+    btn.Font = Enum.Font.GothamSemibold
     btn.Parent = f
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
 
     local list = Instance.new("Frame")
-    list.Size = UDim2.new(1,0,0,#options*35)
+    list.Size = UDim2.new(1,0,0,#options*30)
     list.Position = UDim2.new(0,0,1,5)
-    list.BackgroundColor3 = Color3.fromRGB(20,20,35)
+    list.BackgroundColor3 = Color3.fromRGB(25,25,45)
     list.Visible = false
-    list.ZIndex = 5
+    list.ZIndex = 50
     list.Parent = btn
-    Instance.new("UICorner", list).CornerRadius = UDim.new(0,8)
+    Instance.new("UICorner", list).CornerRadius = UDim.new(0,4)
 
     btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
-
     for i, opt in ipairs(options) do
         local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1,0,0,35)
-        optBtn.Position = UDim2.new(0,0,0,(i-1)*35)
+        optBtn.Size = UDim2.new(1,0,0,30)
+        optBtn.Position = UDim2.new(0,0,0,(i-1)*30)
         optBtn.BackgroundTransparency = 1
         optBtn.Text = opt
-        optBtn.TextColor3 = Color3.new(1,1,1)
-        optBtn.TextSize = 14
+        optBtn.TextColor3 = Theme.Text
+        optBtn.TextSize = 12
         optBtn.Font = Enum.Font.GothamMedium
-        optBtn.ZIndex = 6
+        optBtn.ZIndex = 60
         optBtn.Parent = list
         optBtn.MouseButton1Click:Connect(function()
-            btn.Text = opt
+            btn.Text = name .. ": " .. opt
             list.Visible = false
             pcall(callback, opt)
         end)
     end
 end
 
--- Create Pages
+-- Create Pages Layout
+local ContentArea = Instance.new("Frame")
+ContentArea.Size = UDim2.new(1, -20, 1, -120)
+ContentArea.Position = UDim2.new(0, 10, 0, 110)
+ContentArea.BackgroundTransparency = 1
+ContentArea.Parent = Main
+
 for i = 1, #Tabs do
     local name = Tabs[i]
     local btn = Instance.new("TextButton")
-    local totalPadding = (#Tabs - 1) * 6
-    btn.Size = UDim2.new(1/#Tabs, -(totalPadding/#Tabs), 1, 0)
-    btn.LayoutOrder = i
-    btn.BackgroundColor3 = i == 1 and Color3.fromRGB(80, 0, 255) or Color3.fromRGB(30, 30, 45)
+    btn.Size = UDim2.new(1/#Tabs, -8, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(30,30,50)
     btn.Text = name
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextScaled = false
+    btn.TextColor3 = Theme.Text
     btn.TextSize = 14
     btn.Font = Enum.Font.GothamSemibold
-    btn.BorderSizePixel = 0
     btn.Parent = TabContainer
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
 
-    local page = Instance.new("ScrollingFrame")
-    page.Size = UDim2.new(1, -20, 1, -140)
-    page.Position = UDim2.new(0, 10, 0, 130)
+    local indicator = Instance.new("Frame")
+    indicator.Size = UDim2.new(1, 0, 0, 2)
+    indicator.Position = UDim2.new(0, 0, 1, 0)
+    indicator.BackgroundColor3 = Theme.Accent
+    indicator.Visible = (i == 1)
+    indicator.Parent = btn
+
+    local page = Instance.new("Frame")
+    page.Size = UDim2.new(1, 0, 1, 0)
     page.BackgroundTransparency = 1
-    page.ScrollBarThickness = 6
     page.Visible = (i == 1)
-    page.BorderSizePixel = 0
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.Parent = Main
+    page.Parent = ContentArea
 
-    local PageLayout = Instance.new("UIListLayout")
-    PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    PageLayout.Padding = UDim.new(0, 10)
-    PageLayout.Parent = page
+    local LeftPane = Instance.new("ScrollingFrame")
+    LeftPane.Size = UDim2.new(0.48, 0, 1, -80)
+    LeftPane.Position = UDim2.new(0, 0, 0, 80)
+    LeftPane.BackgroundTransparency = 1
+    LeftPane.ScrollBarThickness = 2
+    LeftPane.Parent = page
+    Instance.new("UIListLayout", LeftPane).Padding = UDim.new(0,10)
 
-    table.insert(TabButtons, btn)
-    table.insert(Pages, page)
+    local RightPane = Instance.new("ScrollingFrame")
+    RightPane.Size = UDim2.new(0.48, 0, 1, -80)
+    RightPane.Position = UDim2.new(0.52, 0, 0, 80)
+    RightPane.BackgroundTransparency = 1
+    RightPane.ScrollBarThickness = 2
+    RightPane.Parent = page
+    Instance.new("UIListLayout", RightPane).Padding = UDim.new(0,10)
+
+    -- Info Banner
+    local Banner = Instance.new("Frame")
+    Banner.Size = UDim2.new(1, 0, 0, 70)
+    Banner.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
+    Banner.Parent = page
+    Instance.new("UICorner", Banner).CornerRadius = UDim.new(0, 6)
+    
+    local BannerTitle = Instance.new("TextLabel")
+    BannerTitle.Size = UDim2.new(1, 0, 0, 30)
+    BannerTitle.Text = "CrownScripts 2026"
+    BannerTitle.TextColor3 = Theme.Text
+    BannerTitle.TextSize = 18
+    BannerTitle.Font = Enum.Font.GothamBold
+    BannerTitle.BackgroundTransparency = 1
+    BannerTitle.Parent = Banner
+
+    local BannerSub = Instance.new("TextLabel")
+    BannerSub.Size = UDim2.new(1, 0, 0, 40)
+    BannerSub.Position = UDim2.new(0, 0, 0, 30)
+    BannerSub.Text = "Status: Online | Game: Sailor Piece"
+    BannerSub.TextColor3 = Theme.DarkText
+    BannerSub.TextSize = 13
+    BannerSub.Font = Enum.Font.GothamMedium
+    BannerSub.BackgroundTransparency = 1
+    BannerSub.Parent = Banner
+
+    table.insert(Pages, {page = page, left = LeftPane, right = RightPane})
 
     btn.MouseButton1Click:Connect(function()
-        for j = 1, #Pages do Pages[j].Visible = false end
+        for _, p in ipairs(Pages) do p.page.Visible = false end
         page.Visible = true
-        for j = 1, #TabButtons do 
-            TweenService:Create(TabButtons[j], TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(30, 30, 45)}):Play()
+        for _, b in ipairs(TabContainer:GetChildren()) do
+            if b:IsA("TextButton") then
+                b:FindFirstChild("Frame").Visible = (b == btn)
+            end
         end
-        TweenService:Create(btn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(80, 0, 255)}):Play()
     end)
+end
+
+-- Update helper function aliases for new 3-panel layout
+local function AddControl(tabIndex, pane, name, default, type, callback, extra)
+    local target = pane == "left" and Pages[tabIndex].left or Pages[tabIndex].right
+    if type == "toggle" then
+        AddToggle(target, name, default, callback)
+    elseif type == "slider" then
+        AddSlider(target, name, extra.min, extra.max, default, extra.unit, callback)
+    elseif type == "dropdown" then
+        AddDropdown(target, name, extra.options, callback)
+    end
 end
 
 -- Core Logic Functions
@@ -588,16 +704,28 @@ RunService.Heartbeat:Connect(function()
             end
         end
         
-        if target and target:FindFirstChild("HumanoidRootPart") then
+        if target and target:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("HumanoidRootPart") then
             local isNPC = qData and target.Name:lower():find(qData.npc:lower())
             if isNPC then
                 char.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, 0, sailorSettings.npcDist)
                 acceptQuest(sailorSettings.activeQuestLine)
             else
+                -- Robust Farming Position (Horizontal Above)
+                char.HumanoidRootPart.Velocity = Vector3.new(0,0,0) -- Stop physics flinging
                 char.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame * CFrame.new(0, sailorSettings.farmDist, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                
                 if sailorSettings.autoAttack then
                     local t = char:FindFirstChildOfClass("Tool")
+                    if not t then
+                        local bp = player:FindFirstChild("Backpack")
+                        if bp then
+                            local tool = bp:FindFirstChildOfClass("Tool")
+                            if tool then tool.Parent = char end
+                        end
+                    end
+                    t = char:FindFirstChildOfClass("Tool")
                     if t then t:Activate() end
+                    VirtualUser:ClickButton1(Vector2.new(9999, 9999)) -- Simulate mouse click
                 end
                 if sailorSettings.autoSkills then
                     local r = ReplicatedStorage:FindFirstChild("Skills", true)
@@ -671,9 +799,27 @@ RunService.Heartbeat:Connect(function()
             currentTarget = target
         end
         if target then
-            target.Humanoid:TakeDamage(5)
-            local t = player.Character and player.Character:FindFirstChildOfClass("Tool")
+            local char = player.Character
+            local t = char:FindFirstChildOfClass("Tool")
+            if not t then
+                local bp = player:FindFirstChild("Backpack")
+                if bp then
+                    local tool = bp:FindFirstChildOfClass("Tool")
+                    if tool then tool.Parent = char end
+                end
+            end
+            t = char:FindFirstChildOfClass("Tool")
             if t then t:Activate() end
+            VirtualUser:ClickButton1(Vector2.new(9999, 9999))
+            
+            -- Optional: Add a small delay or loop for faster hits
+            task.spawn(function()
+                for i=1, 3 do
+                    if t then t:Activate() end
+                    VirtualUser:ClickButton1(Vector2.new(9999, 9999))
+                    task.wait(0.05)
+                end
+            end)
         end
     end)
 end)
@@ -725,72 +871,73 @@ end)
 
 -- Fill Pages
 local Welcome = Instance.new("TextLabel")
-Welcome.Size = UDim2.new(1, 0, 0, 100)
+Welcome.Size = UDim2.new(1, -20, 0, 100)
+Welcome.Position = UDim2.new(0, 10, 0, 80)
 Welcome.BackgroundTransparency = 1
-Welcome.Text = "CrownScripts 2026\nStatus: Online\nGame: Sailor Piece\n[INSERT] to hide menu"
-Welcome.TextColor3 = Color3.new(1,1,1)
-Welcome.TextScaled = true
+Welcome.Text = "Welcome to CrownScripts 2026\nStatus: Online | Use [INSERT] to manage UI\nEnjoy the most advanced automation for Sailor Piece."
+Welcome.TextColor3 = Theme.Text
+Welcome.TextSize = 16
 Welcome.Font = Enum.Font.GothamMedium
-Welcome.Parent = Pages[1]
+Welcome.Parent = Pages[1].left
 
-AddToggle(Pages[2], "Kill Aura", false, function(v) killAuraEnabled = v end)
-AddToggle(Pages[2], "Team Check", false, function(v) teamCheck = v end)
-AddToggle(Pages[2], "Target NPCs", false, function(v) targetNPCs = v end)
-AddSlider(Pages[2], "Range", 5, 100, 25, " studs", function(v) killAuraRange = v end)
+AddControl(2, "left", "Kill Aura", false, "toggle", function(v) killAuraEnabled = v end)
+AddControl(2, "left", "Team Check", false, "toggle", function(v) teamCheck = v end)
+AddControl(2, "left", "Target NPCs", false, "toggle", function(v) targetNPCs = v end)
+AddControl(2, "left", "Range", 25, "slider", function(v) killAuraRange = v end, {min=5, max=100, unit=" studs"})
 
-AddToggle(Pages[3], "Player ESP", false, function(v) espEnabled = v end)
+AddControl(3, "left", "Player ESP", false, "toggle", function(v) espEnabled = v end)
 
-AddToggle(Pages[4], "Auto Leveling", false, function(v) sailorSettings.autoLevel = v end)
-AddToggle(Pages[4], "Auto Clicker", false, function(v) sailorSettings.autoAttack = v end)
-AddToggle(Pages[4], "Auto Skills", false, function(v) sailorSettings.autoSkills = v end)
-AddToggle(Pages[4], "Auto Haki", false, function(v) sailorSettings.autoHaki = v end)
-AddToggle(Pages[4], "Auto Stats", false, function(v) sailorSettings.autoStats = v end)
-AddToggle(Pages[4], "Auto Boss Farm", false, function(v) sailorSettings.autoBoss = v end)
-AddDropdown(Pages[4], "Boss Target", {"All", "Aizen", "True Aizen", "Quincy"}, function(v) sailorSettings.bossTarget = v end)
-AddToggle(Pages[4], "Auto Summon Boss", false, function(v) sailorSettings.autoSummon = v end)
-AddSlider(Pages[4], "Farm Distance", 5, 15, 8, " studs", function(v) sailorSettings.farmDist = v end)
+AddControl(4, "left", "Auto Leveling", false, "toggle", function(v) sailorSettings.autoLevel = v end)
+AddControl(4, "left", "Auto Clicker", false, "toggle", function(v) sailorSettings.autoAttack = v end)
+AddControl(4, "left", "Auto Skills", false, "toggle", function(v) sailorSettings.autoSkills = v end)
+AddControl(4, "right", "Auto Haki", false, "toggle", function(v) sailorSettings.autoHaki = v end)
+AddControl(4, "right", "Auto Stats", false, "toggle", function(v) sailorSettings.autoStats = v end)
+AddControl(4, "right", "Auto Boss Farm", false, "toggle", function(v) sailorSettings.autoBoss = v end)
+AddControl(4, "right", "Boss Target", sailorSettings.bossTarget, "dropdown", function(v) sailorSettings.bossTarget = v end, {options={"All", "Aizen", "True Aizen", "Quincy"}})
+AddControl(4, "right", "Auto Summon Boss", false, "toggle", function(v) sailorSettings.autoSummon = v end)
+AddControl(4, "right", "Farm Distance", 8, "slider", function(v) sailorSettings.farmDist = v end, {min=5, max=15, unit=" studs"})
 
 local questOptions = {"None"}
 for k, _ in pairs(questLines) do table.insert(questOptions, k) end
 table.sort(questOptions)
 
 local qInfo = Instance.new("TextLabel")
-qInfo.Size = UDim2.new(1, -20, 0, 100)
-qInfo.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+qInfo.Size = UDim2.new(1, -20, 0, 80)
+qInfo.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
 qInfo.Text = "Select a QuestLine to begin automation.\nEnsure you have the required level."
-qInfo.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-qInfo.TextSize = 16
+qInfo.TextColor3 = Theme.DarkText
+qInfo.TextSize = 13
 qInfo.Font = Enum.Font.GothamMedium
-qInfo.Parent = Pages[5]
-Instance.new("UICorner", qInfo).CornerRadius = UDim.new(0, 12)
+qInfo.Parent = Pages[5].right
+Instance.new("UICorner", qInfo).CornerRadius = UDim.new(0, 6)
 
-AddDropdown(Pages[5], "Select QuestLine", questOptions, function(v) 
+AddControl(5, "left", "Select QuestLine", "None", "dropdown", function(v) 
     sailorSettings.activeQuestLine = v 
     if v ~= "None" then
         local data = questLines[v]
-        qInfo.Text = "Quest: " .. v .. "\nNPC: " .. data.npc .. "\nMobs: " .. table.concat(data.mobs, ", ") .. "\nBoss: " .. (data.boss or "None") .. "\nReq Level: " .. data.level
+        qInfo.Text = "Quest: " .. v .. "\nNPC: " .. data.npc .. "\nMobs: " .. table.concat(data.mobs, ", ") .. "\nReq Level: " .. data.level
     else
-        qInfo.Text = "Select a QuestLine to begin automation.\nEnsure you have the required level."
+        qInfo.Text = "Select a QuestLine to begin automation."
     end
-end)
-AddToggle(Pages[5], "Start QuestLine Farm", false, function(v) 
+end, {options=questOptions})
+AddControl(5, "left", "Start QuestLine Farm", false, "toggle", function(v) 
     if v then sailorSettings.autoLevel, sailorSettings.autoBoss = false, false
     else sailorSettings.activeQuestLine = "None" end 
 end)
-AddToggle(Pages[5], "Auto NPC Interact", false, function(v) sailorSettings.autoNPC = v end)
-AddSlider(Pages[5], "NPC Interaction Dist", 5, 20, 10, " studs", function(v) sailorSettings.npcDist = v end)
+AddControl(5, "left", "Auto NPC Interact", false, "toggle", function(v) sailorSettings.autoNPC = v end)
+AddControl(5, "left", "NPC Interaction Dist", 10, "slider", function(v) sailorSettings.npcDist = v end, {min=5, max=20, unit=" studs"})
 
-AddSlider(Pages[6], "Speed Multiplier", 1, 10, 1, "x", function(v) speedMultiplier = v end)
-AddToggle(Pages[6], "Infinite Jump", false, function(v) infiniteJumpEnabled = v end)
+AddControl(6, "left", "Speed Multiplier", 1, "slider", function(v) speedMultiplier = v end, {min=1, max=10, unit="x"})
+AddControl(6, "left", "Infinite Jump", false, "toggle", function(v) infiniteJumpEnabled = v end)
 
 local CreditsText = Instance.new("TextLabel")
-CreditsText.Size = UDim2.new(1, -40, 0, 200)
-CreditsText.Position = UDim2.new(0, 20, 0, 60)
+CreditsText.Size = UDim2.new(1, -20, 0, 100)
 CreditsText.BackgroundTransparency = 1
-CreditsText.Text = "crowdsect\ncoleistic\n\ndiscord.gg/crownscripts"
-CreditsText.TextColor3 = Color3.new(1, 1, 1)
-CreditsText.TextSize = 24
+CreditsText.Text = "Developers:\ncrowdsect, coleistic\n\nOfficial Server:\ndiscord.gg/crownscripts"
+CreditsText.TextColor3 = Theme.Text
+CreditsText.TextSize = 16
 CreditsText.Font = Enum.Font.GothamMedium
-CreditsText.Parent = Pages[7]
+CreditsText.Parent = Pages[7].left
 
+Notification("CrownScripts 2026 Loaded Successfully")
 print("CrownScripts 2026 Loaded Successfully")
