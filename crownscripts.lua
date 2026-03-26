@@ -140,7 +140,8 @@ local sailorSettings = {
     autoSummon = false,
     activeQuestLine = "None",
     autoNPC = false,
-    npcDist = 10
+    npcDist = 10,
+    selectedWeapon = "None"
 }
 
 local questLines = {
@@ -370,7 +371,7 @@ TabListLayout.Parent = TabContainer
 
 local TabButtons = {}
 local Pages = {}
-local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Misc", "Credits"}
+local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Misc", "Status", "Credits"}
 
 -- Helper functions for UI
 local function AddSlider(parent, name, minV, maxV, default, unit, callback)
@@ -595,20 +596,30 @@ for i = 1, #Tabs do
         LeftLayout.Padding = UDim.new(0,10)
         LeftLayout.Parent = LeftPane
 
-        local RightPane = Instance.new("ScrollingFrame")
-        RightPane.Name = "RightPane"
-        RightPane.Size = UDim2.new(0.48, 0, 1, -80)
-        RightPane.Position = UDim2.new(0.52, 0, 0, 80)
-        RightPane.BackgroundTransparency = 1
-        RightPane.ScrollBarThickness = 2
-        RightPane.ZIndex = 10
-        RightPane.CanvasSize = UDim2.new(0,0,5,0)
-        RightPane.Parent = page
-        pcall(function() RightPane.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+        local RightPane = nil
         
-        local RightLayout = Instance.new("UIListLayout")
-        RightLayout.Padding = UDim.new(0,10)
-        RightLayout.Parent = RightPane
+        -- The Status Tab gets a unified full-width page
+        if name == "Status" then
+            LeftPane.Size = UDim2.new(1, 0, 1, -80)
+            LeftPane.Position = UDim2.new(0, 0, 0, 80)
+            LeftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            LeftLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        else
+            RightPane = Instance.new("ScrollingFrame")
+            RightPane.Name = "RightPane"
+            RightPane.Size = UDim2.new(0.48, 0, 1, -80)
+            RightPane.Position = UDim2.new(0.52, 0, 0, 80)
+            RightPane.BackgroundTransparency = 1
+            RightPane.ScrollBarThickness = 2
+            RightPane.ZIndex = 10
+            RightPane.CanvasSize = UDim2.new(0,0,5,0)
+            RightPane.Parent = page
+            pcall(function() RightPane.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+            
+            local RightLayout = Instance.new("UIListLayout")
+            RightLayout.Padding = UDim.new(0,10)
+            RightLayout.Parent = RightPane
+        end
 
         -- Info Banner
         local Banner = Instance.new("Frame")
@@ -642,7 +653,7 @@ for i = 1, #Tabs do
         BannerSub.ZIndex = 11
         BannerSub.Parent = Banner
 
-        table.insert(Pages, {page = page, left = LeftPane, right = RightPane})
+        table.insert(Pages, {name = name, page = page, left = LeftPane, right = RightPane})
 
         btn.MouseButton1Click:Connect(function()
             pcall(function()
@@ -660,9 +671,10 @@ for i = 1, #Tabs do
     end)
 end
 
--- Update helper function aliases for new 3-panel layout
+-- Update helper function aliases for new layout
 local function AddControl(tabIndex, pane, name, default, type, callback, extra)
     local target = pane == "left" and Pages[tabIndex].left or Pages[tabIndex].right
+    if not target then return end
     if type == "toggle" then
         AddToggle(target, name, default, callback)
     elseif type == "slider" then
@@ -670,6 +682,39 @@ local function AddControl(tabIndex, pane, name, default, type, callback, extra)
     elseif type == "dropdown" then
         AddDropdown(target, name, extra.options, callback)
     end
+end
+
+local statCounter = 0
+local function AddStatusLog(msg, level)
+    local statusPage = nil
+    for _, p in ipairs(Pages) do if p.name == "Status" then statusPage = p.left break end end
+    if not statusPage then return end
+    
+    statCounter = statCounter + 1
+    local color = Theme.Text
+    if level == "error" then color = Color3.fromRGB(255, 80, 80)
+    elseif level == "success" then color = Color3.fromRGB(80, 255, 150)
+    elseif level == "warn" then color = Color3.fromRGB(255, 200, 80) end
+
+    local logLbl = Instance.new("TextLabel")
+    logLbl.Size = UDim2.new(1, -20, 0, 25)
+    logLbl.BackgroundTransparency = 1
+    logLbl.Text = string.format("[%d] %s", statCounter, msg)
+    logLbl.TextColor3 = color
+    logLbl.TextSize = 14
+    logLbl.Font = Enum.Font.SourceSansBold
+    logLbl.TextXAlignment = Enum.TextXAlignment.Left
+    logLbl.ZIndex = 15
+    logLbl.Parent = statusPage
+    
+    if #statusPage:GetChildren() > 35 then
+        local oldest = nil
+        for _, c in ipairs(statusPage:GetChildren()) do
+            if c:IsA("TextLabel") and (not oldest or c.TextBounds.Y < oldest.TextBounds.Y) then oldest = c end
+        end
+        if oldest then oldest:Destroy() end
+    end
+    statusPage.CanvasPosition = Vector2.new(0, 9999)
 end
 
 -- Core Logic Functions
@@ -757,6 +802,8 @@ local function acceptQuest(name, npcModel)
     if tick() - lastQuestFire < 1.5 then return end
     lastQuestFire = tick()
     
+    AddStatusLog("Attempting to Accept Quest: " .. name, "warn")
+    
     -- Attempt 1: Fire Common Remotes
     local possibleRemotes = {"QuestRemote", "AcceptQuest", "Quest", "StartQuest", "TakeQuest", "GetQuest"}
     for _, remoteName in ipairs(possibleRemotes) do
@@ -766,10 +813,20 @@ local function acceptQuest(name, npcModel)
     end
     
     -- Attempt 2: Fallback to ProximityPrompt if Exploit Supports it
-    if npcModel and fireproximityprompt then
-        for _, prompt in ipairs(npcModel:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                fireproximityprompt(prompt)
+    if npcModel then
+        if fireproximityprompt then
+            for _, prompt in ipairs(npcModel:GetDescendants()) do
+                if prompt:IsA("ProximityPrompt") then
+                    fireproximityprompt(prompt)
+                    AddStatusLog("Fired ProximityPrompt on NPC", "success")
+                end
+            end
+        end
+        -- Attempt 3: Click Detector
+        for _, click in ipairs(npcModel:GetDescendants()) do
+            if click:IsA("ClickDetector") and fireclickdetector then
+                fireclickdetector(click)
+                AddStatusLog("Fired ClickDetector on NPC", "success")
             end
         end
     end
@@ -794,12 +851,24 @@ RunService.Heartbeat:Connect(function()
         local qData = (sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine]) or nil
         
         if qData and sailorSettings.autoNPC and not hasActiveQuest() then
-            -- Find NPC First
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v:IsA("Model") and v.Name:lower():find(qData.npc:lower()) and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")) then
-                    target = v
-                    break
+            -- Find NPC First with Caching to Prevent Lag
+            if _G.cachedNPC and _G.cachedNPC.Parent then
+                target = _G.cachedNPC
+            else
+                if not _G.lastNPCSearch or tick() - _G.lastNPCSearch > 5 then
+                    _G.lastNPCSearch = tick()
+                    AddStatusLog("Searching Map for NPC: " .. qData.npc, "warn")
+                    for _, v in ipairs(workspace:GetDescendants()) do
+                        if v:IsA("Model") and v.Name:lower():find(qData.npc:lower()) and (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso") or v:FindFirstChild("Root")) then
+                            _G.cachedNPC = v
+                            break
+                        end
+                    end
+                    if not _G.cachedNPC then
+                        AddStatusLog("CRITICAL: Cannot find Quest NPC matching '" .. qData.npc .. "'. Double check the NPC name in the questLines table!", "error")
+                    end
                 end
+                target = _G.cachedNPC
             end
         end
         
@@ -841,7 +910,16 @@ RunService.Heartbeat:Connect(function()
                     char.HumanoidRootPart.CFrame = targetHRP.CFrame * CFrame.new(0, sailorSettings.farmDist, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                     
                     if sailorSettings.autoAttack then
-                        local t = char:FindFirstChildOfClass("Tool")
+                        local t = char:FindFirstChild(sailorSettings.selectedWeapon)
+                        if not t and sailorSettings.selectedWeapon ~= "None" then
+                            local bp = player:FindFirstChild("Backpack")
+                            if bp then
+                                local tool = bp:FindFirstChild(sailorSettings.selectedWeapon)
+                                if tool then tool.Parent = char end
+                            end
+                        end
+                        -- Fallback to any tool if selected is not found or is "None"
+                        t = char:FindFirstChildOfClass("Tool")
                         if not t then
                             local bp = player:FindFirstChild("Backpack")
                             if bp then
@@ -849,9 +927,15 @@ RunService.Heartbeat:Connect(function()
                                 if tool then tool.Parent = char end
                             end
                         end
+                        
                         t = char:FindFirstChildOfClass("Tool")
-                        if t then t:Activate() end
-                        VirtualUser:ClickButton1(Vector2.new(9999, 9999))
+                        if t then 
+                            t:Activate() 
+                        end
+                        
+                        -- Explicit Left Click Simulation for Combat
+                        VirtualUser:CaptureController()
+                        VirtualUser:ClickButton1(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
                     end
                     if sailorSettings.autoSkills then
                         local r = ReplicatedStorage:FindFirstChild("Skills", true)
@@ -1015,6 +1099,22 @@ pcall(function()
     AddControl(2, "left", "Target NPCs", false, "toggle", function(v) targetNPCs = v end)
     AddControl(2, "left", "Range", 25, "slider", function(v) killAuraRange = v end, {min=5, max=100, unit=" studs"})
 
+    -- Weapon Selection
+    local weaponList = {"None"}
+    pcall(function()
+        if player.Backpack then
+            for _, t in ipairs(player.Backpack:GetChildren()) do
+                if t:IsA("Tool") then table.insert(weaponList, t.Name) end
+            end
+        end
+        if player.Character then
+            for _, t in ipairs(player.Character:GetChildren()) do
+                if t:IsA("Tool") then table.insert(weaponList, t.Name) end
+            end
+        end
+    end)
+    AddControl(2, "right", "Select Weapon", "None", "dropdown", function(v) sailorSettings.selectedWeapon = v end, {options=weaponList})
+
     AddControl(3, "left", "Player ESP", false, "toggle", function(v) espEnabled = v end)
 
     AddControl(4, "left", "Auto Leveling", false, "toggle", function(v) sailorSettings.autoLevel = v end)
@@ -1071,10 +1171,11 @@ pcall(function()
     CreditsText.TextSize = 16
     CreditsText.Font = Enum.Font.SourceSansBold
     CreditsText.ZIndex = 11
-    CreditsText.Parent = Pages[7].left
+    CreditsText.Parent = Pages[8].left -- Credits moved to page 8
 
     Notification("CrownScripts 2026 Loaded Successfully")
     StatusLabel.Text = "Build: stable_v1 | Active & Stable"
     StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+    AddStatusLog("System initialized. Welcome to CrownScripts.", "success")
     print("CrownScripts 2026 Loaded Successfully")
 end)
