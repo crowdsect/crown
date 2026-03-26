@@ -255,6 +255,12 @@ TabContainer.Position = UDim2.new(0, 10, 0, 70)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = Main
 
+local TabListLayout = Instance.new("UIListLayout")
+TabListLayout.FillDirection = Enum.FillDirection.Horizontal
+TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TabListLayout.Padding = UDim.new(0, 6)
+TabListLayout.Parent = TabContainer
+
 local TabButtons = {}
 local Pages = {}
 local Tabs = {"Home", "Combat", "ESP", "Sailor", "QuestLines", "Misc", "Credits"}
@@ -429,12 +435,14 @@ end
 for i = 1, #Tabs do
     local name = Tabs[i]
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1/#Tabs, -4, 1, 0)
-    btn.Position = UDim2.new((i-1)/#Tabs, 2, 0, 0)
+    local totalPadding = (#Tabs - 1) * 6
+    btn.Size = UDim2.new(1/#Tabs, -(totalPadding/#Tabs), 1, 0)
+    btn.LayoutOrder = i
     btn.BackgroundColor3 = i == 1 and Color3.fromRGB(80, 0, 255) or Color3.fromRGB(30, 30, 45)
     btn.Text = name
     btn.TextColor3 = Color3.new(1,1,1)
-    btn.TextScaled = true
+    btn.TextScaled = false
+    btn.TextSize = 14
     btn.Font = Enum.Font.GothamSemibold
     btn.BorderSizePixel = 0
     btn.Parent = TabContainer
@@ -447,7 +455,13 @@ for i = 1, #Tabs do
     page.ScrollBarThickness = 6
     page.Visible = (i == 1)
     page.BorderSizePixel = 0
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
     page.Parent = Main
+
+    local PageLayout = Instance.new("UIListLayout")
+    PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    PageLayout.Padding = UDim.new(0, 10)
+    PageLayout.Parent = page
 
     table.insert(TabButtons, btn)
     table.insert(Pages, page)
