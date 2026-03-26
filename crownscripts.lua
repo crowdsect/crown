@@ -92,6 +92,7 @@ OpenBtn.Text = "C"
 OpenBtn.TextColor3 = Color3.new(1, 1, 1)
 OpenBtn.TextSize = 25
 OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Visible = false
 OpenBtn.Parent = ScreenGui
 Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(1, 0)
 local OpenGradient = Instance.new("UIGradient")
@@ -243,6 +244,8 @@ KeyStatus.Parent = KeyFrame
 local function StartMain()
     KeyFrame:Destroy()
     Main.Visible = true
+    uiVisible = true
+    OpenBtn.Visible = true
 end
 
 SubmitBtn.MouseButton1Click:Connect(function()
@@ -283,20 +286,27 @@ local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 850, 0, 620)
 Main.Position = UDim2.new(0.5, -425, 0.5, -310)
 Main.BackgroundColor3 = Theme.MainBG
-Main.BorderSizePixel = 0
-Main.Parent = ScreenGui
+Main.BorderSizePixel = 1
+Main.BorderColor3 = Theme.Accent
 Main.Visible = false
+Main.Parent = ScreenGui
 makeDraggable(Main)
 
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Thickness = 3
-UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-local UIStrokeGradient = Instance.new("UIGradient")
-UIStrokeGradient.Color = Theme.Glow
-UIStrokeGradient.Rotation = 45
-UIStrokeGradient.Parent = UIStroke
-UIStroke.Parent = Main
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+pcall(function()
+    Main.BorderSizePixel = 0
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Thickness = 3
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    local UIStrokeGradient = Instance.new("UIGradient")
+    UIStrokeGradient.Color = Theme.Glow
+    UIStrokeGradient.Rotation = 45
+    UIStrokeGradient.Parent = UIStroke
+    UIStroke.Parent = Main
+end)
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = Main
 
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 50)
@@ -513,6 +523,7 @@ for i = 1, #Tabs do
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
 
     local indicator = Instance.new("Frame")
+    indicator.Name = "TabIndicator"
     indicator.Size = UDim2.new(1, 0, 0, 2)
     indicator.Position = UDim2.new(0, 0, 1, 0)
     indicator.BackgroundColor3 = Theme.Accent
@@ -526,20 +537,30 @@ for i = 1, #Tabs do
     page.Parent = ContentArea
 
     local LeftPane = Instance.new("ScrollingFrame")
+    LeftPane.Name = "LeftPane"
     LeftPane.Size = UDim2.new(0.48, 0, 1, -80)
     LeftPane.Position = UDim2.new(0, 0, 0, 80)
     LeftPane.BackgroundTransparency = 1
     LeftPane.ScrollBarThickness = 2
     LeftPane.Parent = page
-    Instance.new("UIListLayout", LeftPane).Padding = UDim.new(0,10)
+    pcall(function() LeftPane.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+    
+    local LeftLayout = Instance.new("UIListLayout")
+    LeftLayout.Padding = UDim.new(0,10)
+    LeftLayout.Parent = LeftPane
 
     local RightPane = Instance.new("ScrollingFrame")
+    RightPane.Name = "RightPane"
     RightPane.Size = UDim2.new(0.48, 0, 1, -80)
     RightPane.Position = UDim2.new(0.52, 0, 0, 80)
     RightPane.BackgroundTransparency = 1
     RightPane.ScrollBarThickness = 2
     RightPane.Parent = page
-    Instance.new("UIListLayout", RightPane).Padding = UDim.new(0,10)
+    pcall(function() RightPane.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+    
+    local RightLayout = Instance.new("UIListLayout")
+    RightLayout.Padding = UDim.new(0,10)
+    RightLayout.Parent = RightPane
 
     -- Info Banner
     local Banner = Instance.new("Frame")
@@ -570,13 +591,17 @@ for i = 1, #Tabs do
     table.insert(Pages, {page = page, left = LeftPane, right = RightPane})
 
     btn.MouseButton1Click:Connect(function()
-        for _, p in ipairs(Pages) do p.page.Visible = false end
-        page.Visible = true
-        for _, b in ipairs(TabContainer:GetChildren()) do
-            if b:IsA("TextButton") then
-                b:FindFirstChild("Frame").Visible = (b == btn)
+        pcall(function()
+            for _, p in ipairs(Pages) do p.page.Visible = false end
+            page.Visible = true
+            for _, b in ipairs(TabContainer:GetChildren()) do
+                if b:IsA("TextButton") then
+                    local ind = b:FindFirstChild("TabIndicator")
+                    if ind then ind.Visible = (b == btn) end
+                    TweenService:Create(b, TweenInfo.new(0.3), {BackgroundColor3 = (b == btn) and Color3.fromRGB(45, 45, 75) or Color3.fromRGB(30,30,50)}):Play()
+                end
             end
-        end
+        end)
     end)
 end
 
