@@ -497,45 +497,94 @@ local function AddDropdown(parent, name, options, callback)
     local f = Instance.new("Frame")
     f.Size = UDim2.new(1,0,0,35)
     f.BackgroundTransparency = 1
+    f.ZIndex = 15
     f.Parent = parent
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1,0,1,0)
     btn.BackgroundColor3 = Theme.SecondaryBG
-    btn.Text = name .. ": " .. options[1]
+    btn.Text = name .. ": " .. (options[1] or "None")
     btn.TextColor3 = Theme.Text
     btn.TextSize = 13
-    btn.Font = Enum.Font.GothamSemibold
+    btn.Font = Enum.Font.SourceSansBold
+    btn.ZIndex = 16
     btn.Parent = f
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0,4)
+    btnCorner.Parent = btn
 
-    local list = Instance.new("Frame")
-    list.Size = UDim2.new(1,0,0,#options*30)
+    local list = Instance.new("ScrollingFrame")
     list.Position = UDim2.new(0,0,1,5)
     list.BackgroundColor3 = Color3.fromRGB(25,25,45)
     list.Visible = false
     list.ZIndex = 50
+    list.ScrollBarThickness = 2
     list.Parent = btn
-    Instance.new("UICorner", list).CornerRadius = UDim.new(0,4)
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0,4)
+    listCorner.Parent = list
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Parent = list
 
-    btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
-    for i, opt in ipairs(options) do
-        local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1,0,0,30)
-        optBtn.Position = UDim2.new(0,0,0,(i-1)*30)
-        optBtn.BackgroundTransparency = 1
-        optBtn.Text = opt
-        optBtn.TextColor3 = Theme.Text
-        optBtn.TextSize = 12
-        optBtn.Font = Enum.Font.GothamMedium
-        optBtn.ZIndex = 60
-        optBtn.Parent = list
-        optBtn.MouseButton1Click:Connect(function()
-            btn.Text = name .. ": " .. opt
-            list.Visible = false
-            pcall(callback, opt)
-        end)
+    local function Populate(opts)
+        for _, c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+        for i, opt in ipairs(opts) do
+            local optBtn = Instance.new("TextButton")
+            optBtn.Size = UDim2.new(1,0,0,30)
+            optBtn.BackgroundTransparency = 1
+            optBtn.Text = opt
+            optBtn.TextColor3 = Theme.Text
+            optBtn.TextSize = 12
+            optBtn.Font = Enum.Font.SourceSans
+            optBtn.ZIndex = 60
+            optBtn.Parent = list
+            optBtn.MouseButton1Click:Connect(function()
+                btn.Text = name .. ": " .. opt
+                list.Visible = false
+                pcall(callback, opt)
+            end)
+        end
+        local newHeight = math.min(#opts * 30, 150)
+        list.Size = UDim2.new(1,0,0,newHeight)
+        list.CanvasSize = UDim2.new(0,0,0,#opts*30)
     end
+
+    Populate(options)
+    btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
+    
+    return {
+        Refresh = function(newOpts) Populate(newOpts) end,
+        SetLabel = function(txt) btn.Text = name .. ": " .. txt end
+    }
+end
+
+local function AddButton(parent, name, callback)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1,0,0,35)
+    f.BackgroundTransparency = 1
+    f.ZIndex = 15
+    f.Parent = parent
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,0,1,0)
+    btn.BackgroundColor3 = Theme.Accent
+    btn.Text = name
+    btn.TextColor3 = Theme.Text
+    btn.TextSize = 13
+    btn.Font = Enum.Font.SourceSansBold
+    btn.ZIndex = 16
+    btn.Parent = f
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0,4)
+    btnCorner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(200, 200, 255)}):Play()
+        task.wait(0.1)
+        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Theme.Accent}):Play()
+        pcall(callback)
+    end)
+    return btn
 end
 
 -- Create Pages Layout
@@ -676,11 +725,13 @@ local function AddControl(tabIndex, pane, name, default, type, callback, extra)
     local target = pane == "left" and Pages[tabIndex].left or Pages[tabIndex].right
     if not target then return end
     if type == "toggle" then
-        AddToggle(target, name, default, callback)
+        return AddToggle(target, name, default, callback)
     elseif type == "slider" then
-        AddSlider(target, name, extra.min, extra.max, default, extra.unit, callback)
+        return AddSlider(target, name, extra.min, extra.max, default, extra.unit, callback)
     elseif type == "dropdown" then
-        AddDropdown(target, name, extra.options, callback)
+        return AddDropdown(target, name, extra.options, callback)
+    elseif type == "button" then
+        return AddButton(target, name, callback)
     end
 end
 
@@ -762,7 +813,6 @@ end
 local function getBoss()
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
-    local bosses = {"Aizen", "True Aizen", "Quincy", "Hollow", "Maiden", "Yamato", "Monarch", "Escanor"}
     local targetName = sailorSettings.bossTarget
     
     if sailorSettings.activeQuestLine ~= "None" and questLines[sailorSettings.activeQuestLine] then
@@ -770,19 +820,25 @@ local function getBoss()
         if questBoss then targetName = questBoss end
     end
 
+    local bestBoss = nil
+    local bDist = 10000
+
     for _, v in ipairs(workspace:GetChildren()) do
         if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:FindFirstChild("HumanoidRootPart") then
-            local name = v.Name
-            local isBoss = false
-            for _, b in ipairs(bosses) do
-                if name:find(b) then isBoss = true break end
-            end
-            if isBoss then
-                if targetName == "All" or name:find(targetName) then return v end
+            -- A boss is either explicitly the named target, OR if "All" is selected, it has massive health
+            local isTargetBoss = (targetName ~= "All" and v.Name:find(targetName))
+            local isGenerousBoss = (targetName == "All" and v.Humanoid.MaxHealth > 5000)
+            
+            if isTargetBoss or isGenerousBoss then
+                local d = (v.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+                if d < bDist then
+                    bDist = d
+                    bestBoss = v
+                end
             end
         end
     end
-    return nil
+    return bestBoss
 end
 
 local function hasActiveQuest()
@@ -1099,21 +1155,33 @@ pcall(function()
     AddControl(2, "left", "Target NPCs", false, "toggle", function(v) targetNPCs = v end)
     AddControl(2, "left", "Range", 25, "slider", function(v) killAuraRange = v end, {min=5, max=100, unit=" studs"})
 
-    -- Weapon Selection
+    -- Weapon Selection (Dynamic)
     local weaponList = {"None"}
-    pcall(function()
-        if player.Backpack then
-            for _, t in ipairs(player.Backpack:GetChildren()) do
-                if t:IsA("Tool") then table.insert(weaponList, t.Name) end
+    local function FetchWeapons()
+        local newWeapons = {"None"}
+        pcall(function()
+            if player.Backpack then
+                for _, t in ipairs(player.Backpack:GetChildren()) do
+                    if t:IsA("Tool") then table.insert(newWeapons, t.Name) end
+                end
             end
-        end
-        if player.Character then
-            for _, t in ipairs(player.Character:GetChildren()) do
-                if t:IsA("Tool") then table.insert(weaponList, t.Name) end
+            if player.Character then
+                for _, t in ipairs(player.Character:GetChildren()) do
+                    if t:IsA("Tool") then table.insert(newWeapons, t.Name) end
+                end
             end
-        end
+        end)
+        return newWeapons
+    end
+    weaponList = FetchWeapons()
+    local weaponDrop = AddControl(2, "right", "Select Weapon", "None", "dropdown", function(v) sailorSettings.selectedWeapon = v end, {options=weaponList})
+    AddControl(2, "right", "Refresh Weapons", false, "button", function()
+        pcall(function()
+            local wps = FetchWeapons()
+            if weaponDrop then weaponDrop.Refresh(wps) end
+            AddStatusLog("Loaded " .. #wps-1 .. " working weapons from Bag.", "success")
+        end)
     end)
-    AddControl(2, "right", "Select Weapon", "None", "dropdown", function(v) sailorSettings.selectedWeapon = v end, {options=weaponList})
 
     AddControl(3, "left", "Player ESP", false, "toggle", function(v) espEnabled = v end)
 
@@ -1123,7 +1191,26 @@ pcall(function()
     AddControl(4, "right", "Auto Haki", false, "toggle", function(v) sailorSettings.autoHaki = v end)
     AddControl(4, "right", "Auto Stats", false, "toggle", function(v) sailorSettings.autoStats = v end)
     AddControl(4, "right", "Auto Boss Farm", false, "toggle", function(v) sailorSettings.autoBoss = v end)
-    AddControl(4, "right", "Boss Target", sailorSettings.bossTarget, "dropdown", function(v) sailorSettings.bossTarget = v end, {options={"All", "Aizen", "True Aizen", "Quincy"}})
+    
+    -- Dynamic Boss Selection
+    local bossList = {"All"}
+    local bossDrop = AddControl(4, "right", "Boss Target", "All", "dropdown", function(v) sailorSettings.bossTarget = v end, {options=bossList})
+    AddControl(4, "right", "Refresh Bosses", false, "button", function()
+        pcall(function()
+            local newBosses = {"All"}
+            local dupCheck = {}
+            for _, v in ipairs(workspace:GetChildren()) do
+                if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.MaxHealth >= 2000 and not Players:GetPlayerFromCharacter(v) then
+                    if not dupCheck[v.Name] then
+                        table.insert(newBosses, v.Name)
+                        dupCheck[v.Name] = true
+                    end
+                end
+            end
+            if bossDrop then bossDrop.Refresh(newBosses) end
+            AddStatusLog("Live Boss Table Refreshed: Found " .. #newBosses-1 .. " Boss Clusters.", "success")
+        end)
+    end)
     AddControl(4, "right", "Auto Summon Boss", false, "toggle", function(v) sailorSettings.autoSummon = v end)
     AddControl(4, "right", "Farm Distance", 8, "slider", function(v) sailorSettings.farmDist = v end, {min=5, max=15, unit=" studs"})
 
