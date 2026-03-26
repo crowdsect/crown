@@ -865,7 +865,7 @@ local function getBoss()
                 for _, kb in ipairs(knownBosses) do if v.Name:find(kb) then isNamedBoss = true break end end
                 
                 local isTargetBoss = (targetName ~= "All" and v.Name:find(targetName))
-                local isGenerousBoss = (targetName == "All" and (v.Humanoid.MaxHealth > 1000 or isNamedBoss))
+                local isGenerousBoss = (targetName == "All" and isNamedBoss)
                 
                 if isTargetBoss or isGenerousBoss then
                     local d = ((v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Torso")).Position - char.HumanoidRootPart.Position).Magnitude
@@ -911,16 +911,30 @@ task.spawn(function()
                     end
                 end
                 
-                t = char:FindFirstChildOfClass("Tool")
-                if t then 
-                    t:Activate() 
+                
+                -- Auto Clicker (Script Hub Tier)
+                if VirtualInputManager and sailorSettings.autoAttack then
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait()
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                elseif mouse1press then
+                    mouse1press()
+                    task.wait()
+                    mouse1release()
                 end
                 
-                -- Explicit spam
-                if VirtualUser then
-                    VirtualUser:CaptureController()
-                    VirtualUser:ClickButton1(Vector2.new(9999, 9999))
+                -- Sequential Auto Skills (Z, X, C, V, F)
+                if sailorSettings.autoSkills then
+                    local keys = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}
+                    for _, key in ipairs(keys) do
+                        if VirtualInputManager then
+                            VirtualInputManager:SendKeyEvent(true, key, false, game)
+                            task.wait(0.1)
+                            VirtualInputManager:SendKeyEvent(false, key, false, game)
+                        end
+                    end
                 end
+                
             end)
         end
     end
@@ -1105,45 +1119,47 @@ local function getBestTarget()
 end
 
 RunService.Heartbeat:Connect(function()
-    if not killAuraEnabled then 
-        if currentTarget and currentTarget:FindFirstChild("CrownTarget") then currentTarget.CrownTarget:Destroy() end
-        currentTarget = nil
-        return 
-    end
+    if not killAuraEnabled then return end
     pcall(function()
-        local target = getBestTarget()
-        if target ~= currentTarget then
-            if currentTarget and currentTarget:FindFirstChild("CrownTarget") then currentTarget.CrownTarget:Destroy() end
-            if target then
-                local h = Instance.new("Highlight")
-                h.Name = "CrownTarget"
-                h.FillColor = Color3.new(1,0,0)
-                h.Parent = target
+        local char = player.Character
+        local t = player.Character and player.Character:FindFirstChildOfClass("Tool")
+        if not t or not t:FindFirstChild("Handle") then return end
+        
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and isTargetValid(v) and not Players:GetPlayerFromCharacter(v) then
+                if targetNPCs or v.Name:find("Quest") or v.Name:find("Enemy") then
+                    local dist = (v.HumanoidRootPart.Position - root.Position).Magnitude
+                    if dist <= killAuraRange then
+                        if firetouchinterest then
+                            for _, part in ipairs(v:GetChildren()) do
+                                if part:IsA("BasePart") then
+                                    firetouchinterest(t.Handle, part, 0)
+                                    firetouchinterest(t.Handle, part, 1)
+                                end
+                            end
+                        end
+                    end
+                end
             end
-            currentTarget = target
         end
-        if target then
-            local char = player.Character
-            local t = char:FindFirstChildOfClass("Tool")
-            if not t then
-                local bp = player:FindFirstChild("Backpack")
-                if bp then
-                    local tool = bp:FindFirstChildOfClass("Tool")
-                    if tool then tool.Parent = char end
-                end
-            end
-            t = char:FindFirstChildOfClass("Tool")
-            if t then t:Activate() end
-            VirtualUser:ClickButton1(Vector2.new(9999, 9999))
-            
-            -- Optional: Add a small delay or loop for faster hits
-            task.spawn(function()
-                for i=1, 3 do
-                    if t then t:Activate() end
-                    VirtualUser:ClickButton1(Vector2.new(9999, 9999))
-                    task.wait(0.05)
-                end
-            end)
+        
+        if teamCheck then
+             for _, v in ipairs(Players:GetPlayers()) do
+                 if v ~= player and v.Character and isTargetValid(v.Character) and v.Team ~= player.Team then
+                     local d = (v.Character.HumanoidRootPart.Position - root.Position).Magnitude
+                     if d <= killAuraRange and firetouchinterest then
+                         for _, part in ipairs(v.Character:GetChildren()) do
+                             if part:IsA("BasePart") then
+                                 firetouchinterest(t.Handle, part, 0)
+                                 firetouchinterest(t.Handle, part, 1)
+                             end
+                         end
+                     end
+                 end
+             end
         end
     end)
 end)
@@ -1189,8 +1205,60 @@ end
 Players.PlayerAdded:Connect(CreateESP)
 for _, p in ipairs(Players:GetPlayers()) do CreateESP(p) end
 
+local bossTracerEnabled = false
+
 RunService.RenderStepped:Connect(function()
     if espEnabled then for _, p in ipairs(Players:GetPlayers()) do CreateESP(p) end end
+    
+    -- Boss Tracer Map-Wide Logic
+    if bossTracerEnabled then
+        local knownBosses = {"Manipulator", "Cursed", "Limitless", "Aizen", "Yamato", "Escanor"}
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and not Players:GetPlayerFromCharacter(v) then
+                local isBoss = false
+                if sailorSettings.bossTarget ~= "All" and v.Name:find(sailorSettings.bossTarget) then isBoss = true end
+                if not isBoss then
+                    for _, kb in ipairs(knownBosses) do
+                        if v.Name:find(kb) then isBoss = true; break end
+                    end
+                end
+                
+                if isBoss then
+                    if not v:FindFirstChild("BossTracerGui") then
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name = "BossTracerGui"
+                        bb.AlwaysOnTop = true
+                        bb.Size = UDim2.new(0, 150, 0, 30)
+                        bb.ExtentsOffset = Vector3.new(0, 5, 0)
+                        
+                        local txt = Instance.new("TextLabel")
+                        txt.Size = UDim2.new(1,0,1,0)
+                        txt.BackgroundTransparency = 1
+                        txt.Text = "★ BOSS: " .. v.Name .. " ★"
+                        txt.TextColor3 = Color3.fromRGB(255, 50, 50)
+                        txt.TextScaled = true
+                        txt.Font = Enum.Font.SourceSansBold
+                        txt.Parent = bb
+                        bb.Parent = v
+                        
+                        local h = Instance.new("Highlight")
+                        h.Name = "BossTracerHighlight"
+                        h.FillColor = Color3.fromRGB(255, 20, 20)
+                        h.FillTransparency = 0.5
+                        h.OutlineColor = Color3.fromRGB(255, 0, 0)
+                        h.Parent = v
+                    end
+                end
+            end
+        end
+    else
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v:FindFirstChild("BossTracerGui") then
+                v.BossTracerGui:Destroy()
+                if v:FindFirstChild("BossTracerHighlight") then v.BossTracerHighlight:Destroy() end
+            end
+        end
+    end
 end)
 
 pcall(function()
@@ -1241,6 +1309,7 @@ pcall(function()
     end)
 
     AddControl(3, "left", "Player ESP", false, "toggle", function(v) espEnabled = v end)
+    AddControl(3, "left", "Boss Tracer (ESP)", false, "toggle", function(v) bossTracerEnabled = v end)
 
     AddControl(4, "left", "Auto Leveling", false, "toggle", function(v) sailorSettings.autoLevel = v end)
     AddControl(4, "left", "Auto Clicker", false, "toggle", function(v) sailorSettings.autoAttack = v end)
